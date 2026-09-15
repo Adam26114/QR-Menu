@@ -13,6 +13,7 @@ import type * as authBootstrap from "../authBootstrap.js";
 import type * as authBootstrapPolicy from "../authBootstrapPolicy.js";
 import type * as betterAuthOptions from "../betterAuthOptions.js";
 import type * as betterAuthServer from "../betterAuthServer.js";
+import type * as crons from "../crons.js";
 import type * as http from "../http.js";
 import type * as lib_customFunctions from "../lib/customFunctions.js";
 import type * as lib_errors from "../lib/errors.js";
@@ -23,9 +24,11 @@ import type * as model_menu from "../model/menu.js";
 import type * as model_projects from "../model/projects.js";
 import type * as model_restaurants from "../model/restaurants.js";
 import type * as model_subscriptions from "../model/subscriptions.js";
+import type * as model_tables from "../model/tables.js";
 import type * as projects from "../projects.js";
 import type * as restaurants from "../restaurants.js";
 import type * as subscriptions from "../subscriptions.js";
+import type * as tables from "../tables.js";
 
 import type {
   ApiFromModules,
@@ -39,6 +42,7 @@ declare const fullApi: ApiFromModules<{
   authBootstrapPolicy: typeof authBootstrapPolicy;
   betterAuthOptions: typeof betterAuthOptions;
   betterAuthServer: typeof betterAuthServer;
+  crons: typeof crons;
   http: typeof http;
   "lib/customFunctions": typeof lib_customFunctions;
   "lib/errors": typeof lib_errors;
@@ -49,9 +53,11 @@ declare const fullApi: ApiFromModules<{
   "model/projects": typeof model_projects;
   "model/restaurants": typeof model_restaurants;
   "model/subscriptions": typeof model_subscriptions;
+  "model/tables": typeof model_tables;
   projects: typeof projects;
   restaurants: typeof restaurants;
   subscriptions: typeof subscriptions;
+  tables: typeof tables;
 }>;
 
 /**

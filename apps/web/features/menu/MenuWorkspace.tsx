@@ -134,12 +134,19 @@ function ItemEditor({
     const create = useMutation(api.menu.createItem)
     const update = useMutation(api.menu.updateItem)
     const setAvailability = useMutation(api.menu.setAvailability)
+    const generateImageUploadUrl = useMutation(api.menu.generateImageUploadUrl)
+    const bindImageUpload = useMutation(api.menu.bindImageUpload)
+    const attachImage = useMutation(api.menu.attachImage)
+    const removeImage = useMutation(api.menu.removeImage)
     const [name, setName] = useState(item?.name ?? "")
     const [description, setDescription] = useState(item?.description ?? "")
     const [priceMinor, setPrice] = useState(String(item?.priceMinor ?? 0))
     const [available, setAvailable] = useState(item?.available ?? true)
     const [error, setError] = useState<unknown>()
     const [pending, setPending] = useState(false)
+    const [imagePending, setImagePending] = useState(false)
+    const [imageError, setImageError] = useState<unknown>()
+    const [imageStatus, setImageStatus] = useState<string>()
     async function submit(event: React.FormEvent) {
         event.preventDefault()
         if (pending) return
@@ -180,6 +187,75 @@ function ItemEditor({
             setPending(false)
         }
     }
+    async function uploadImage(file: File) {
+        if (!item || imagePending) return
+        setImageError(undefined)
+        setImageStatus("Preparing image upload...")
+        setImagePending(true)
+        try {
+            const { url, capability } = await generateImageUploadUrl({
+                itemId: item._id,
+            })
+            setImageStatus("Uploading image...")
+            const response = await fetch(url, {
+                method: "POST",
+                headers: {
+                    "Content-Type": file.type || "application/octet-stream",
+                },
+                body: file,
+            })
+            if (!response.ok) throw new Error("upload")
+            const payload: unknown = await response.json()
+            if (
+                !payload ||
+                typeof payload !== "object" ||
+                !("storageId" in payload) ||
+                typeof payload.storageId !== "string"
+            )
+                throw new Error("upload")
+            const storageId = payload.storageId as Id<"_storage">
+            setImageStatus("Finalizing image upload...")
+            await bindImageUpload({
+                itemId: item._id,
+                storageId,
+                capability,
+            })
+            setImageStatus("Attaching image...")
+            await attachImage({
+                itemId: item._id,
+                storageId,
+                capability,
+            })
+            setImageStatus("Image attached.")
+        } catch (e) {
+            setImageError(e)
+            setImageStatus(undefined)
+        } finally {
+            setImagePending(false)
+        }
+    }
+    async function handleImageChange(
+        event: React.ChangeEvent<HTMLInputElement>
+    ) {
+        const file = event.target.files?.[0]
+        if (file) await uploadImage(file)
+        event.target.value = ""
+    }
+    async function handleRemoveImage() {
+        if (!item || imagePending) return
+        setImageError(undefined)
+        setImageStatus("Removing image...")
+        setImagePending(true)
+        try {
+            await removeImage({ itemId: item._id })
+            setImageStatus("Image removed.")
+        } catch (e) {
+            setImageError(e)
+            setImageStatus(undefined)
+        } finally {
+            setImagePending(false)
+        }
+    }
     return (
         <form
             className="grid gap-2 rounded-md border border-dashed p-3"
@@ -215,6 +291,44 @@ function ItemEditor({
                 />{" "}
                 Available to order
             </label>
+            {item && (
+                <div className="grid gap-2 rounded-md border border-dashed p-3">
+                    <div>
+                        <p className="text-sm font-medium">Item image</p>
+                        <p className="text-sm text-muted-foreground">
+                            Add a menu image from your device.
+                        </p>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2">
+                        <Input
+                            type="file"
+                            accept="image/*"
+                            onChange={handleImageChange}
+                            disabled={imagePending || pending}
+                            aria-label="Upload item image"
+                        />
+                        {item.imageStorageId && (
+                            <Button
+                                type="button"
+                                variant="outline"
+                                onClick={() => void handleRemoveImage()}
+                                disabled={imagePending || pending}
+                            >
+                                Remove image
+                            </Button>
+                        )}
+                    </div>
+                    {imageStatus && (
+                        <p className="text-sm text-muted-foreground" role="status">
+                            {imageStatus}
+                        </p>
+                    )}
+                    <ErrorMessage
+                        error={imageError}
+                        fallback="Unable to update the item image. Please try again."
+                    />
+                </div>
+            )}
             <div className="flex flex-wrap items-center gap-2">
                 <Button type="submit" disabled={pending}>
                     {pending ? "Saving..." : item ? "Save item" : "Add item"}
@@ -622,13 +736,16 @@ function OptionGroup({ group }: { group: Doc<"menuOptionGroups"> }) {
                                     </Button>
                                 )}
                             </div>
-                            {!group.archived && editingChoice === choice._id && (
-                                <OptionChoiceEditor
-                                    groupId={group._id}
-                                    choice={choice}
-                                    onDone={() => setEditingChoice(undefined)}
-                                />
-                            )}
+                            {!group.archived &&
+                                editingChoice === choice._id && (
+                                    <OptionChoiceEditor
+                                        groupId={group._id}
+                                        choice={choice}
+                                        onDone={() =>
+                                            setEditingChoice(undefined)
+                                        }
+                                    />
+                                )}
                         </div>
                     ))
                 )}
@@ -933,104 +1050,110 @@ function MenuWorkspaceContent({ restaurant }: Props) {
                                             </p>
                                         </div>
                                         <div className="flex flex-wrap gap-1">
-                                            {!category.archived && !item.archived && (
-                                                <>
-                                                    <Button
-                                                        type="button"
-                                                        size="sm"
-                                                        onClick={() =>
-                                                            void run(() =>
-                                                                setAvailability(
-                                                                    {
-                                                                        itemId: item._id,
-                                                                        available:
-                                                                            !item.available,
-                                                                    }
-                                                                )
-                                                            )
-                                                        }
-                                                        disabled={pending}
-                                                    >
-                                                        {item.available
-                                                            ? "Mark unavailable"
-                                                            : "Mark available"}
-                                                    </Button>
-                                                    <Button
-                                                        type="button"
-                                                        size="sm"
-                                                        variant="outline"
-                                                        onClick={() =>
-                                                            setEditingItem(
-                                                                editingItem ===
-                                                                    item._id
-                                                                    ? undefined
-                                                                    : item._id
-                                                            )
-                                                        }
-                                                        disabled={pending}
-                                                    >
-                                                        {editingItem ===
-                                                        item._id
-                                                            ? "Close"
-                                                            : "Edit"}
-                                                    </Button>
-                                                    <Button
-                                                        type="button"
-                                                        size="sm"
-                                                        onClick={() => {
-                                                            if (
-                                                                confirmArchive(
-                                                                    "this item"
-                                                                )
-                                                            )
+                                            {!category.archived &&
+                                                !item.archived && (
+                                                    <>
+                                                        <Button
+                                                            type="button"
+                                                            size="sm"
+                                                            onClick={() =>
                                                                 void run(() =>
-                                                                    archiveItem(
+                                                                    setAvailability(
                                                                         {
                                                                             itemId: item._id,
+                                                                            available:
+                                                                                !item.available,
                                                                         }
                                                                     )
                                                                 )
-                                                        }}
-                                                        disabled={pending}
-                                                    >
-                                                        Archive
-                                                    </Button>
-                                                    <Button
-                                                        type="button"
-                                                        size="sm"
-                                                        onClick={() =>
-                                                            void moveItem(
-                                                                activeCategoryItems.findIndex(
-                                                                    (entry) =>
-                                                                        entry._id ===
+                                                            }
+                                                            disabled={pending}
+                                                        >
+                                                            {item.available
+                                                                ? "Mark unavailable"
+                                                                : "Mark available"}
+                                                        </Button>
+                                                        <Button
+                                                            type="button"
+                                                            size="sm"
+                                                            variant="outline"
+                                                            onClick={() =>
+                                                                setEditingItem(
+                                                                    editingItem ===
                                                                         item._id
-                                                                ),
-                                                                -1
-                                                            )
-                                                        }
-                                                        disabled={pending}
-                                                    >
-                                                        Up
-                                                    </Button>
-                                                    <Button
-                                                        type="button"
-                                                        size="sm"
-                                                        onClick={() =>
-                                                            void moveItem(
-                                                                activeCategoryItems.findIndex(
-                                                                    (entry) =>
-                                                                        entry._id ===
-                                                                        item._id
-                                                                ),
-                                                                1
-                                                            )
-                                                        }
-                                                        disabled={pending}
-                                                    >
-                                                        Down
-                                                    </Button>
-                                                </>
-                                            )}
+                                                                        ? undefined
+                                                                        : item._id
+                                                                )
+                                                            }
+                                                            disabled={pending}
+                                                        >
+                                                            {editingItem ===
+                                                            item._id
+                                                                ? "Close"
+                                                                : "Edit"}
+                                                        </Button>
+                                                        <Button
+                                                            type="button"
+                                                            size="sm"
+                                                            onClick={() => {
+                                                                if (
+                                                                    confirmArchive(
+                                                                        "this item"
+                                                                    )
+                                                                )
+                                                                    void run(
+                                                                        () =>
+                                                                            archiveItem(
+                                                                                {
+                                                                                    itemId: item._id,
+                                                                                }
+                                                                            )
+                                                                    )
+                                                            }}
+                                                            disabled={pending}
+                                                        >
+                                                            Archive
+                                                        </Button>
+                                                        <Button
+                                                            type="button"
+                                                            size="sm"
+                                                            onClick={() =>
+                                                                void moveItem(
+                                                                    activeCategoryItems.findIndex(
+                                                                        (
+                                                                            entry
+                                                                        ) =>
+                                                                            entry._id ===
+                                                                            item._id
+                                                                    ),
+                                                                    -1
+                                                                )
+                                                            }
+                                                            disabled={pending}
+                                                        >
+                                                            Up
+                                                        </Button>
+                                                        <Button
+                                                            type="button"
+                                                            size="sm"
+                                                            onClick={() =>
+                                                                void moveItem(
+                                                                    activeCategoryItems.findIndex(
+                                                                        (
+                                                                            entry
+                                                                        ) =>
+                                                                            entry._id ===
+                                                                            item._id
+                                                                    ),
+                                                                    1
+                                                                )
+                                                            }
+                                                            disabled={pending}
+                                                        >
+                                                            Down
+                                                        </Button>
+                                                    </>
+                                                )}
                                             {item.archived && (
                                                 <Button
                                                     type="button"
@@ -1052,15 +1175,15 @@ function MenuWorkspaceContent({ restaurant }: Props) {
                                     {!category.archived &&
                                         !item.archived &&
                                         editingItem === item._id && (
-                                        <ItemEditor
-                                            restaurantId={restaurant._id}
-                                            categoryId={category._id}
-                                            item={item}
-                                            onDone={() =>
-                                                setEditingItem(undefined)
-                                            }
-                                        />
-                                    )}
+                                            <ItemEditor
+                                                restaurantId={restaurant._id}
+                                                categoryId={category._id}
+                                                item={item}
+                                                onDone={() =>
+                                                    setEditingItem(undefined)
+                                                }
+                                            />
+                                        )}
                                     {!item.archived && (
                                         <OptionGroupsEditor item={item} />
                                     )}

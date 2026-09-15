@@ -9,10 +9,11 @@ import betterAuth from "./betterAuth/convex.config"
  * WHERE: Auth client and HTTP routes use the registered component.
  */
 const app = defineApp({
-  env: {
-    BETTER_AUTH_SECRET: v.string(),
-    SITE_URL: v.string(),
-  },
+    env: {
+        BETTER_AUTH_SECRET: v.string(),
+        SITE_URL: v.string(),
+        QR_TOKEN_ENCRYPTION_KEY: v.string(),
+    },
 })
 app.use(betterAuth)
 
