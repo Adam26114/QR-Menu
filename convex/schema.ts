@@ -109,4 +109,30 @@ export default defineSchema({
     createdAt: v.number(),
     updatedAt: v.number(),
   }).index("by_restaurant_id", ["restaurantId"]),
+  menuCategories: defineTable({
+    restaurantId: v.id("restaurants"), name: v.string(), sortOrder: v.number(),
+    archived: v.boolean(), createdAt: v.number(), updatedAt: v.number(),
+  }).index("by_restaurant_id", ["restaurantId"])
+    .index("by_restaurant_id_and_sort_order", ["restaurantId", "sortOrder"]),
+  menuItems: defineTable({
+    restaurantId: v.id("restaurants"), categoryId: v.id("menuCategories"), name: v.string(),
+    description: v.optional(v.string()), priceMinor: v.number(), available: v.boolean(),
+    archived: v.boolean(), sortOrder: v.number(), imageStorageId: v.optional(v.id("_storage")),
+    createdAt: v.number(), updatedAt: v.number(),
+  }).index("by_restaurant_id_and_category_id_and_sort_order", ["restaurantId", "categoryId", "sortOrder"])
+    .index("by_category_id_and_sort_order", ["categoryId", "sortOrder"])
+    .index("by_restaurant_id", ["restaurantId"]),
+  menuOptionGroups: defineTable({
+    restaurantId: v.id("restaurants"), menuItemId: v.id("menuItems"), name: v.string(),
+    selectionMode: v.union(v.literal("single"), v.literal("multiple")), required: v.boolean(),
+    minSelections: v.number(), maxSelections: v.number(), sortOrder: v.number(), archived: v.boolean(),
+    createdAt: v.number(), updatedAt: v.number(),
+  }).index("by_menu_item_id_and_sort_order", ["menuItemId", "sortOrder"])
+    .index("by_restaurant_id", ["restaurantId"]),
+  menuOptionChoices: defineTable({
+    restaurantId: v.id("restaurants"), optionGroupId: v.id("menuOptionGroups"), name: v.string(),
+    priceDeltaMinor: v.number(), sortOrder: v.number(), archived: v.boolean(),
+    createdAt: v.number(), updatedAt: v.number(),
+  }).index("by_option_group_id_and_sort_order", ["optionGroupId", "sortOrder"])
+    .index("by_restaurant_id", ["restaurantId"]),
 })

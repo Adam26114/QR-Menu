@@ -8,6 +8,7 @@ import { api } from "../../../../convex/_generated/api"
 import { Button, buttonVariants } from "@workspace/ui/components/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@workspace/ui/components/card"
 import { RestaurantSettingsForm } from "./RestaurantSettingsForm"
+import { MenuWorkspace } from "../menu/MenuWorkspace"
 
 export function RestaurantWorkspace({ section = "overview" }: { section?: string }) {
   const { restaurantSlug } = useParams<{ restaurantSlug: string }>()
@@ -19,6 +20,7 @@ export function RestaurantWorkspace({ section = "overview" }: { section?: string
   if (!restaurant || !membership) return <div className="mx-auto max-w-5xl animate-pulse space-y-4"><div className="h-10 w-2/3 rounded bg-muted" /><div className="h-36 rounded-xl bg-muted" /></div>
   if (restricted && membership.role !== "owner") return <ReadOnlyState section={section} />
   if (section === "settings") return <RestaurantSettingsForm restaurant={restaurant} />
+  if (section === "menu") return <MenuWorkspace restaurant={restaurant} />
   if (section === "overview") return <Overview restaurant={restaurant} canAccept={canAccept} subscription={subscription} />
   return <Placeholder section={section} />
 }
