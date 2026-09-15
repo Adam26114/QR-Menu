@@ -74,3 +74,13 @@ export async function getTenantRestaurant(
     throw expectedError(ERROR_CODES.NOT_FOUND, "Restaurant not found")
   return restaurant
 }
+
+export async function requireRestaurantRead(ctx: DatabaseCtx, restaurantId: Id<"restaurants">) {
+  const identity = await requireIdentity(ctx)
+  const restaurant = await ctx.db.get("restaurants", restaurantId)
+  if (!restaurant) throw expectedError(ERROR_CODES.NOT_FOUND, "Restaurant not found")
+  const membership = await getActiveMembership(ctx, identity.tokenIdentifier, restaurantId)
+  if (!membership || (restaurant.archived && membership.role !== "owner"))
+    throw expectedError(ERROR_CODES.NOT_FOUND, "Restaurant not found")
+  return restaurant
+}

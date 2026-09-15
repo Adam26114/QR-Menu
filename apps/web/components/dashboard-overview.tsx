@@ -1,120 +1,40 @@
-import { ArrowUpRight, BarChart3, FolderKanban, ListTodo } from "lucide-react"
+"use client"
 
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@workspace/ui/components/card"
+import Link from "next/link"
+import { useQuery } from "convex/react"
+import { ArrowRight, MapPin, Plus, Store } from "lucide-react"
+import { api } from "../../../convex/_generated/api"
+import { buttonVariants } from "@workspace/ui/components/button"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@workspace/ui/components/card"
 
-const previewCards = [
-  {
-    label: "Example projects",
-    value: "12",
-    change: "+8.2%",
-    icon: FolderKanban,
-  },
-  { label: "Example tasks", value: "573", change: "+12.5%", icon: ListTodo },
-  {
-    label: "Example completion",
-    value: "84.6%",
-    change: "+4.3%",
-    icon: BarChart3,
-  },
-]
-
-const chartBars = [42, 58, 48, 70, 62, 79, 66, 88, 74, 92, 81, 96]
-
-/** A deliberately static presentation layer for the dashboard overview. */
 export function DashboardOverview() {
+  const restaurants = useQuery(api.restaurants.list)
+
   return (
-    <section
-      aria-labelledby="dashboard-overview-title"
-      className="mx-auto flex w-full max-w-6xl flex-col gap-6"
-    >
-      <header className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+    <section className="mx-auto flex w-full max-w-6xl flex-col gap-8">
+      <header className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <p className="text-sm text-muted-foreground">Workspace</p>
-          <h1
-            id="dashboard-overview-title"
-            className="text-3xl font-semibold tracking-tight"
-          >
-            Overview
-          </h1>
-          <p className="mt-1 max-w-xl text-sm text-muted-foreground">
-            A quick view of your workspace.
-          </p>
+          <p className="text-sm font-medium uppercase tracking-[0.18em] text-primary">Restaurant desk</p>
+          <h1 className="mt-2 text-3xl font-semibold tracking-tight md:text-4xl">Choose a restaurant</h1>
+          <p className="mt-2 max-w-xl text-muted-foreground">Open a workspace to manage service, settings, and your team.</p>
         </div>
-        <span className="w-fit rounded-full border bg-muted/50 px-3 py-1 text-xs font-medium text-muted-foreground">
-          Starter preview
-        </span>
+        <Link className={buttonVariants()} href="/dashboard/new"><Plus aria-hidden="true" /> Add restaurant</Link>
       </header>
 
-      <div className="rounded-lg border border-dashed bg-muted/20 px-4 py-3 text-sm text-muted-foreground">
-        <span className="font-medium text-foreground">Example data only.</span>{" "}
-        These preview values are illustrative and are not production workspace
-        metrics.
-      </div>
-
-      <div className="grid gap-4 md:grid-cols-3">
-        {previewCards.map(({ label, value, change, icon: Icon }) => (
-          <Card key={label} className="gap-4 py-5">
-            <CardHeader className="flex flex-row items-center justify-between pb-0">
-              <CardDescription>{label}</CardDescription>
-              <Icon
-                className="size-4 text-muted-foreground"
-                aria-hidden="true"
-              />
-            </CardHeader>
-            <CardContent className="flex items-end justify-between">
-              <CardTitle className="text-2xl">{value}</CardTitle>
-              <span className="flex items-center gap-1 text-xs font-medium text-muted-foreground">
-                <ArrowUpRight className="size-3" aria-hidden="true" />
-                {change} example
-              </span>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
-
-      <Card>
-        <CardHeader className="flex flex-row items-start justify-between gap-4">
-          <div className="space-y-1">
-            <CardTitle>Example activity</CardTitle>
-            <CardDescription>
-              A visual placeholder for a future workspace trend.
-            </CardDescription>
-          </div>
-          <span className="rounded-md bg-muted px-2 py-1 text-xs text-muted-foreground">
-            Demo chart
-          </span>
-        </CardHeader>
-        <CardContent>
-          <div
-            className="flex h-48 items-end gap-2 border-b border-l px-3 pt-6 pb-0"
-            role="img"
-            aria-label="Example activity chart showing an illustrative upward trend over twelve periods"
-          >
-            {chartBars.map((height, index) => (
-              <div
-                key={index}
-                className="group flex h-full flex-1 items-end"
-                aria-hidden="true"
-              >
-                <div
-                  className="w-full rounded-t-sm bg-primary/70 transition-colors group-hover:bg-primary"
-                  style={{ height: `${height}%` }}
-                />
-              </div>
-            ))}
-          </div>
-          <div className="mt-3 flex justify-between pl-3 text-xs text-muted-foreground">
-            <span>Example period 1</span>
-            <span>Example period 12</span>
-          </div>
-        </CardContent>
-      </Card>
+      {restaurants?.length === 0 ? (
+        <Card className="border-dashed bg-muted/20">
+          <CardHeader><div className="mb-2 flex size-12 items-center justify-center rounded-2xl bg-primary/10 text-primary"><Store aria-hidden="true" /></div><CardTitle>Your first restaurant starts here</CardTitle><CardDescription>Create a restaurant profile before taking orders or inviting staff.</CardDescription></CardHeader>
+          <CardContent><Link className={buttonVariants()} href="/dashboard/new">Create restaurant <ArrowRight aria-hidden="true" /></Link></CardContent>
+        </Card>
+      ) : restaurants === undefined ? (
+        <div className="grid gap-4 md:grid-cols-2"><div className="h-36 animate-pulse rounded-xl bg-muted" /><div className="h-36 animate-pulse rounded-xl bg-muted" /></div>
+      ) : (
+        <div className="grid gap-4 md:grid-cols-2">
+          {restaurants.map((restaurant) => <Link key={restaurant._id} href={`/dashboard/${restaurant.slug}`} className="group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 rounded-xl">
+            <Card className="h-full transition-colors group-hover:border-primary/50"><CardHeader className="flex flex-row items-start justify-between gap-4"><div><CardTitle>{restaurant.name}</CardTitle><CardDescription className="mt-1">/{restaurant.slug}</CardDescription></div><span className="rounded-full bg-emerald-500/10 px-2.5 py-1 text-xs font-medium text-emerald-700 dark:text-emerald-300">Active</span></CardHeader><CardContent className="flex items-center gap-2 text-sm text-muted-foreground"><MapPin className="size-4" aria-hidden="true" /> Open workspace <ArrowRight className="ml-auto size-4 transition-transform group-hover:translate-x-1" aria-hidden="true" /></CardContent></Card>
+          </Link>)}
+        </div>
+      )}
     </section>
   )
 }

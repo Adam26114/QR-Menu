@@ -33,6 +33,19 @@ export function isSubscriptionEligible(
   )
 }
 
+export async function getSubscriptionForPolicy(
+  ctx: QueryCtx,
+  restaurantId: Id<"restaurants">
+): Promise<Doc<"subscriptions"> | null> {
+  const subscriptions = await ctx.db
+    .query("subscriptions")
+    .withIndex("by_restaurant_id", (q) => q.eq("restaurantId", restaurantId))
+    .take(2)
+  if (subscriptions.length > 1)
+    throw expectedError(ERROR_CODES.CONFLICT, "Multiple subscriptions exist for this restaurant")
+  return subscriptions[0] ?? null
+}
+
 export async function requireSubscriptionEligibility(
   ctx: QueryCtx,
   restaurantId: Id<"restaurants">,

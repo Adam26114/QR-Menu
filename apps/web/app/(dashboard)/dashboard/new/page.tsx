@@ -1,0 +1,10 @@
+"use client"
+import { useState } from "react"
+import { useRouter } from "next/navigation"
+import { useMutation } from "convex/react"
+import { api } from "../../../../../../convex/_generated/api"
+import { Button } from "@workspace/ui/components/button"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@workspace/ui/components/card"
+import { Input } from "@workspace/ui/components/input"
+import { Label } from "@workspace/ui/components/label"
+export default function NewRestaurantPage() { const router = useRouter(); const create = useMutation(api.restaurants.create); const [name, setName] = useState(""); const [slug, setSlug] = useState(""); const [error, setError] = useState(""); return <Card className="mx-auto max-w-xl"><CardHeader><CardTitle>Create a restaurant</CardTitle><CardDescription>Set up the workspace your team will use.</CardDescription></CardHeader><CardContent><form className="grid gap-4" onSubmit={async (event) => { event.preventDefault(); setError(""); try { await create({ name, slug, idempotencyKey: crypto.randomUUID() }); router.push(`/dashboard/${slug}`) } catch (e) { setError(e instanceof Error ? e.message : "Could not create restaurant") } }}><div className="grid gap-2"><Label htmlFor="restaurant-name">Name</Label><Input id="restaurant-name" value={name} onChange={(e) => setName(e.target.value)} required /></div><div className="grid gap-2"><Label htmlFor="restaurant-slug">URL slug</Label><Input id="restaurant-slug" value={slug} onChange={(e) => setSlug(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, "-"))} placeholder="my-restaurant" required /></div>{error && <p role="alert" className="text-sm text-destructive">{error}</p>}<Button type="submit">Create restaurant</Button></form></CardContent></Card> }
