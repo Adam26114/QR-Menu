@@ -129,3 +129,71 @@ test("a separate identity cannot list or read another tenant", async () => {
     other.query(api.subscriptions.get, { restaurantId })
   ).rejects.toThrow("FORBIDDEN")
 })
+
+test("a separate identity cannot write another tenant's restaurant", async () => {
+  const t = convexTest(schema, modules)
+  const owner = t.withIdentity({
+    subject: "write-owner-subject",
+    tokenIdentifier: "issuer|write-owner",
+  })
+  const other = t.withIdentity({
+    subject: "write-other-subject",
+    tokenIdentifier: "issuer|write-other",
+  })
+  const restaurantId = await owner.mutation(api.restaurants.create, {
+    name: "Private",
+    slug: "private-writes",
+    idempotencyKey: "private-writes-key",
+  })
+
+  await expect(
+    other.mutation(api.restaurants.updateSettings, {
+      restaurantId,
+      patch: { name: "Changed by another tenant" },
+    })
+  ).rejects.toThrow("FORBIDDEN")
+  await expect(
+    other.mutation(api.restaurants.archive, { restaurantId })
+  ).rejects.toThrow("FORBIDDEN")
+  await expect(
+    other.mutation(api.restaurants.restore, { restaurantId })
+  ).rejects.toThrow("FORBIDDEN")
+})
+
+test("revoked membership denies protected restaurant reads", async () => {
+  const t = convexTest(schema, modules)
+  const owner = t.withIdentity({
+    subject: "revoked-owner-subject",
+    tokenIdentifier: "issuer|revoked-owner",
+  })
+  const restaurantId = await owner.mutation(api.restaurants.create, {
+    name: "Revoked",
+    slug: "revoked-membership",
+    idempotencyKey: "revoked-membership-key",
+  })
+
+  await t.run(async (ctx) => {
+    const membership = await ctx.db
+      .query("restaurantMemberships")
+      .withIndex("by_restaurant_id_and_token_identifier", (q) =>
+        q
+          .eq("restaurantId", restaurantId)
+          .eq("tokenIdentifier", "issuer|revoked-owner")
+      )
+      .unique()
+    await ctx.db.patch(membership._id, { status: "revoked" })
+  })
+
+  await expect(
+    owner.query(api.restaurants.getMembership, { restaurantId })
+  ).resolves.toBeNull()
+  await expect(
+    owner.query(api.restaurants.get, { restaurantId })
+  ).rejects.toThrow("NOT_FOUND")
+  await expect(
+    owner.query(api.subscriptions.get, { restaurantId })
+  ).rejects.toThrow("FORBIDDEN")
+  await expect(
+    owner.query(api.restaurants.canAcceptOrders, { restaurantId })
+  ).rejects.toThrow("FORBIDDEN")
+})
