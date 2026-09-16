@@ -1,11 +1,17 @@
 "use client"
 
 import Link from "next/link"
-import { Component, type ReactNode, useState } from "react"
+import {
+    Component,
+    type ReactNode,
+    useState,
+    useSyncExternalStore,
+} from "react"
 import { useMutation, useQuery } from "convex/react"
 import { api } from "../../../../convex/_generated/api"
 import type { Doc, Id } from "../../../../convex/_generated/dataModel"
 import { Button } from "@workspace/ui/components/button"
+import { Badge } from "@workspace/ui/components/badge"
 import {
     Card,
     CardContent,
@@ -14,10 +20,36 @@ import {
 } from "@workspace/ui/components/card"
 import { Input } from "@workspace/ui/components/input"
 import { Textarea } from "@workspace/ui/components/textarea"
+import { Switch } from "@workspace/ui/components/switch"
+import {
+    Sheet,
+    SheetContent,
+    SheetDescription,
+    SheetHeader,
+    SheetTitle,
+} from "@workspace/ui/components/sheet"
 import { formatMinorCurrency } from "@workspace/ui/lib/format-currency"
 import { ConfirmDialog } from "@/components/global/ConfirmDialog"
 
 type Props = { restaurant: Doc<"restaurants"> }
+
+const subscribeDesktopMediaQuery = (onStoreChange: () => void) => {
+    if (typeof window === "undefined") return () => undefined
+    const mediaQuery = window.matchMedia("(min-width: 768px)")
+    mediaQuery.addEventListener("change", onStoreChange)
+    return () => mediaQuery.removeEventListener("change", onStoreChange)
+}
+
+const getDesktopMediaQuerySnapshot = () =>
+    typeof window !== "undefined" && window.matchMedia("(min-width: 768px)").matches
+
+function useDesktopMediaQuery() {
+    return useSyncExternalStore(
+        subscribeDesktopMediaQuery,
+        getDesktopMediaQuerySnapshot,
+        () => false
+    )
+}
 
 function friendlyError(error: unknown, fallback: string) {
     const message = error instanceof Error ? error.message.toLowerCase() : ""
@@ -131,7 +163,9 @@ function ItemEditor({
 }: {
     restaurantId: Id<"restaurants">
     categoryId: Id<"menuCategories">
-    item?: Doc<"menuItems">
+    item?: Pick<Doc<"menuItems">, "_id" | "name" | "description" | "priceMinor" | "available"> & {
+        imageUrl?: string | null
+    }
     onDone: () => void
 }) {
     const create = useMutation(api.menu.createItem)
@@ -311,7 +345,7 @@ function ItemEditor({
                             disabled={imagePending || pending}
                             aria-label="Upload item image"
                         />
-                        {item.imageStorageId && (
+                        {item.imageUrl && (
                             <Button
                                 type="button"
                                 variant="outline"
@@ -766,8 +800,11 @@ function OptionGroup({ group }: { group: Doc<"menuOptionGroups"> }) {
 function MenuItemCard({
     item,
     category,
-    canEdit,
+    currency,
+    onEdit,
+    onManageCategory,
     onToggleAvailability,
+    children,
 }: {
     item: {
         _id: Id<"menuItems">
@@ -779,13 +816,17 @@ function MenuItemCard({
         imageUrl: string | null
     }
     category: Doc<"menuCategories">
-    canEdit: boolean
+    currency?: string
+    onEdit?: () => void
+    onManageCategory?: () => void
     onToggleAvailability?: () => void
+    children?: ReactNode
 }) {
     return (
         <div className="grid gap-3 rounded-xl border bg-card p-3 shadow-sm">
             <div className="grid aspect-[4/3] place-items-center overflow-hidden rounded-lg bg-muted text-sm text-muted-foreground">
                 {item.imageUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element -- Convex signed storage URLs are runtime external URLs not configured for next/image.
                     <img
                         src={item.imageUrl}
                         alt={item.name}
@@ -796,29 +837,52 @@ function MenuItemCard({
                 )}
             </div>
             <div>
-                <span className="font-medium">
-                    {item.name} - {formatMinorCurrency(item.priceMinor)}
-                </span>
-                {item.description && (
-                    <p className="text-sm text-muted-foreground">{item.description}</p>
-                )}
-                <p className="text-sm text-muted-foreground">
-                    <span className="mr-2 rounded-full bg-muted px-2 py-0.5">
-                        {item.available ? "Available" : "Unavailable"}
+                <div className="flex flex-wrap items-start justify-between gap-2">
+                    <span className="font-medium">{item.name}</span>
+                    <span className="font-medium tabular-nums">
+                        {formatMinorCurrency(item.priceMinor, currency)}
                     </span>
-                    {item.archived && (
-                        <span className="rounded-full bg-muted px-2 py-0.5">Archived</span>
-                    )}
-                </p>
+                </div>
+                <div className="mt-2 flex flex-wrap gap-1">
+                    <Badge variant={item.available ? "secondary" : "outline"}>
+                        {item.available ? "Available" : "Unavailable"}
+                    </Badge>
+                    {item.archived && <Badge variant="destructive">Archived</Badge>}
+                </div>
+                {item.description && (
+                    <p className="mt-2 text-sm text-muted-foreground">
+                        {item.description}
+                    </p>
+                )}
+                {category.archived && (
+                    <p className="mt-2 text-xs text-muted-foreground">
+                        Category archived
+                    </p>
+                )}
             </div>
-            {canEdit && !item.archived && onToggleAvailability && (
-                <Button type="button" onClick={onToggleAvailability}>
-                    {item.available ? "Mark unavailable" : "Mark available"}
-                </Button>
-            )}
-            {!canEdit && category.archived && (
-                <p className="text-xs text-muted-foreground">Category archived</p>
-            )}
+            <div className="flex flex-wrap items-center gap-2">
+                {onToggleAvailability && !item.archived && !category.archived && (
+                    <label className="flex items-center gap-2 text-sm">
+                        <Switch
+                            checked={item.available}
+                            onCheckedChange={onToggleAvailability}
+                            aria-label={`Mark ${item.name} ${item.available ? "unavailable" : "available"}`}
+                        />
+                        Available
+                    </label>
+                )}
+                {onEdit && (
+                    <Button type="button" size="sm" variant="outline" onClick={onEdit}>
+                        Edit item
+                    </Button>
+                )}
+                {onManageCategory && (
+                    <Button type="button" size="sm" variant="ghost" onClick={onManageCategory}>
+                        Manage category
+                    </Button>
+                )}
+                {children}
+            </div>
         </div>
     )
 }
@@ -872,6 +936,66 @@ function OptionGroupsEditor({ item }: { item: Doc<"menuItems"> }) {
     )
 }
 
+type FocusedEditor =
+    | { kind: "category"; id?: Id<"menuCategories"> }
+    | { kind: "item"; id?: Id<"menuItems">; categoryId: Id<"menuCategories"> }
+
+function FocusedEditorContent({
+    restaurantId,
+    focusedEditor,
+    focusedCategory,
+    focusedItem,
+    onDone,
+    showHeading = true,
+}: {
+    restaurantId: Id<"restaurants">
+    focusedEditor: FocusedEditor
+    focusedCategory?: Doc<"menuCategories">
+    focusedItem?: Doc<"menuItems">
+    onDone: () => void
+    showHeading?: boolean
+}) {
+    return (
+        <div className="grid min-w-0 gap-4 overflow-hidden">
+            {showHeading && <div>
+                <h2 className="text-lg font-semibold">
+                    {focusedEditor.kind === "category"
+                        ? focusedCategory
+                            ? `Edit ${focusedCategory.name}`
+                            : "Add category"
+                        : focusedItem
+                          ? `Edit ${focusedItem.name}`
+                          : "Add menu item"}
+                </h2>
+                <p className="text-sm text-muted-foreground">
+                    Keep this editor focused while you manage the catalog.
+                </p>
+            </div>}
+            {focusedEditor.kind === "category" && (
+                <CategoryEditor
+                    restaurantId={restaurantId}
+                    category={focusedCategory}
+                    onDone={onDone}
+                />
+            )}
+            {focusedEditor.kind === "item" && (
+                <div className="grid min-w-0 gap-4">
+                    <ItemEditor
+                        restaurantId={restaurantId}
+                        categoryId={focusedEditor.categoryId}
+                        item={focusedItem}
+                        onDone={onDone}
+                    />
+                    {focusedItem && <OptionGroupsEditor item={focusedItem} />}
+                </div>
+            )}
+            <Button type="button" variant="outline" onClick={onDone}>
+                Close
+            </Button>
+        </div>
+    )
+}
+
 function MenuWorkspaceContent({ restaurant }: Props) {
     const categories = useQuery(api.menu.listCategories, {
         restaurantId: restaurant._id,
@@ -891,13 +1015,11 @@ function MenuWorkspaceContent({ restaurant }: Props) {
     const [selected, setSelected] = useState<Id<"menuCategories">>()
     const [categoryFilter, setCategoryFilter] = useState<Id<"menuCategories"> | "all">("all")
     const [showArchived, setShowArchived] = useState(false)
-    const [editingCategory, setEditingCategory] =
-        useState<Id<"menuCategories">>()
-    const [editingItem, setEditingItem] = useState<Id<"menuItems">>()
-    const [addingItem, setAddingItem] = useState(false)
+    const [focusedEditor, setFocusedEditor] = useState<FocusedEditor>()
     const [error, setError] = useState<unknown>()
     const [pending, setPending] = useState(false)
     const [confirm, setConfirm] = useState<{ kind: "category" | "item"; id: string }>()
+    const isDesktop = useDesktopMediaQuery()
     if (categories === undefined || items === undefined)
         return <p role="status">Loading menu...</p>
     const active = categories.filter((category) => !category.archived)
@@ -910,6 +1032,23 @@ function MenuWorkspaceContent({ restaurant }: Props) {
         categoryFilter === "all" ? true : item.categoryId === categoryFilter
     ).filter((item) => showArchived || !item.archived)
     const activeCategoryItems = categoryItems.filter((item) => !item.archived)
+    const focusedEditorRecord = focusedEditor?.id
+        ? focusedEditor.kind === "category"
+            ? categories.find((value) => value._id === focusedEditor.id)
+            : items.find((value) => value._id === focusedEditor.id)
+        : undefined
+    const visibleFocusedEditor =
+        focusedEditor &&
+        (!focusedEditor.id ||
+            (focusedEditorRecord && (showArchived || !focusedEditorRecord.archived)))
+            ? focusedEditor
+            : undefined
+    const focusedCategory = visibleFocusedEditor?.kind === "category"
+        ? categories.find((value) => value._id === visibleFocusedEditor.id)
+        : undefined
+    const focusedItem = visibleFocusedEditor?.kind === "item"
+        ? items.find((value) => value._id === visibleFocusedEditor.id)
+        : undefined
     async function run(action: () => Promise<unknown>) {
         if (pending) return
         setError(undefined)
@@ -956,7 +1095,11 @@ function MenuWorkspaceContent({ restaurant }: Props) {
         )
     }
     return (
-        <section className="mx-auto grid min-w-0 max-w-6xl gap-6 overflow-x-hidden break-words font-sans">
+        <section
+            className={`mx-auto grid min-w-0 max-w-6xl gap-6 overflow-x-hidden break-words font-sans ${
+                isDesktop && visibleFocusedEditor ? "md:pr-[30rem]" : ""
+            }`}
+        >
             <header className="flex flex-wrap items-center justify-between gap-3">
                 <div className="min-w-0">
                     <p className="text-xs font-semibold uppercase tracking-[0.18em] text-primary">Catalog</p>
@@ -973,8 +1116,7 @@ function MenuWorkspaceContent({ restaurant }: Props) {
                              }
                              setCategoryFilter(target._id)
                              setSelected(target._id)
-                             setEditingItem(undefined)
-                             setAddingItem(true)
+                              setFocusedEditor({ kind: "item", categoryId: target._id })
                          }}
                      >
                          Add item
@@ -1036,7 +1178,10 @@ function MenuWorkspaceContent({ restaurant }: Props) {
                                     <Button
                                         type="button"
                                         variant="ghost"
-                                        onClick={() => setSelected(value._id)}
+                                         onClick={() => {
+                                             setSelected(value._id)
+                                             setCategoryFilter(value._id)
+                                         }}
                                         aria-pressed={
                                             category?._id === value._id
                                         }
@@ -1050,9 +1195,7 @@ function MenuWorkspaceContent({ restaurant }: Props) {
                                                 type="button"
                                                 size="sm"
                                                 onClick={() =>
-                                                    setEditingCategory(
-                                                        value._id
-                                                    )
+                                                         setFocusedEditor({ kind: "category", id: value._id })
                                                 }
                                             >
                                                 Edit
@@ -1060,7 +1203,9 @@ function MenuWorkspaceContent({ restaurant }: Props) {
                                             <Button
                                                 type="button"
                                                 size="sm"
-                                                onClick={() => setConfirm({ kind: "category", id: value._id })}
+                                                 onClick={() => {
+                                                     setConfirm({ kind: "category", id: value._id })
+                                                 }}
                                                 disabled={pending}
                                             >
                                                 Archive
@@ -1103,15 +1248,6 @@ function MenuWorkspaceContent({ restaurant }: Props) {
                                             Restore
                                         </Button>
                                     )}
-                                    {editingCategory === value._id && (
-                                        <CategoryEditor
-                                            restaurantId={restaurant._id}
-                                            category={value}
-                                            onDone={() =>
-                                                setEditingCategory(undefined)
-                                            }
-                                        />
-                                    )}
                                 </div>
                             )
                         })
@@ -1136,10 +1272,10 @@ function MenuWorkspaceContent({ restaurant }: Props) {
                                             type="button"
                                             size="sm"
                                             variant="outline"
-                                            onClick={() => {
-                                                setCategoryFilter(value._id)
-                                                setSelected(value._id)
-                                            }}
+                                             onClick={() => {
+                                                 setCategoryFilter(value._id)
+                                                 setFocusedEditor({ kind: "category", id: value._id })
+                                             }}
                                         >
                                             Manage category
                                         </Button>
@@ -1157,16 +1293,94 @@ function MenuWorkspaceContent({ restaurant }: Props) {
                                                      key={item._id}
                                                       item={item}
                                                       category={value}
-                                                      canEdit={true}
-                                                      onToggleAvailability={() =>
-                                                          void run(() =>
-                                                              setAvailability({
-                                                                  itemId: item._id,
-                                                                  available: !item.available,
-                                                              })
-                                                          )
-                                                      }
-                                                  />
+                                                       currency={restaurant.currency}
+                                                        onEdit={
+                                                            !value.archived && !item.archived
+                                                                ? () =>
+                                                                      setFocusedEditor({
+                                                                          kind: "item",
+                                                                          id: item._id,
+                                                                          categoryId: value._id,
+                                                                      })
+                                                                : undefined
+                                                        }
+                                                        onManageCategory={
+                                                            !value.archived
+                                                                ? () =>
+                                                                      setFocusedEditor({
+                                                                          kind: "category",
+                                                                          id: value._id,
+                                                                      })
+                                                                : undefined
+                                                        }
+                                                        onToggleAvailability={() =>
+                                                           void run(() =>
+                                                               setAvailability({
+                                                                   itemId: item._id,
+                                                                   available: !item.available,
+                                                               })
+                                                           )
+                                                       }
+                                                       >
+                                                           {!value.archived && !item.archived && (
+                                                               <>
+                                                                   <Button
+                                                                       type="button"
+                                                                       size="sm"
+                                                                       onClick={() =>
+                                                                           setConfirm({ kind: "item", id: item._id })
+                                                                       }
+                                                                       disabled={pending}
+                                                                   >
+                                                                       Archive
+                                                                   </Button>
+                                                                   <Button
+                                                                       type="button"
+                                                                       size="sm"
+                                                                       onClick={() =>
+                                                                           void moveItem(
+                                                                               value,
+                                                                               valueItems
+                                                                                   .filter((entry) => !entry.archived)
+                                                                                   .findIndex((entry) => entry._id === item._id),
+                                                                               -1
+                                                                           )
+                                                                       }
+                                                                       disabled={pending}
+                                                                   >
+                                                                       Up
+                                                                   </Button>
+                                                                   <Button
+                                                                       type="button"
+                                                                       size="sm"
+                                                                       onClick={() =>
+                                                                           void moveItem(
+                                                                               value,
+                                                                               valueItems
+                                                                                   .filter((entry) => !entry.archived)
+                                                                                   .findIndex((entry) => entry._id === item._id),
+                                                                               1
+                                                                           )
+                                                                       }
+                                                                       disabled={pending}
+                                                                   >
+                                                                       Down
+                                                                   </Button>
+                                                               </>
+                                                           )}
+                                                           {item.archived && (
+                                                               <Button
+                                                                   type="button"
+                                                                   size="sm"
+                                                                   onClick={() =>
+                                                                       void run(() => restoreItem({ itemId: item._id }))
+                                                                   }
+                                                                   disabled={pending}
+                                                               >
+                                                                   Restore
+                                                               </Button>
+                                                           )}
+                                                        </MenuItemCard>
                                              ))}
                                          </div>
                                      )}
@@ -1180,16 +1394,6 @@ function MenuWorkspaceContent({ restaurant }: Props) {
                         <CardTitle>{category.name}</CardTitle>
                     </CardHeader>
                     <CardContent className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                         {!category.archived && addingItem && (
-                            <ItemEditor
-                                restaurantId={restaurant._id}
-                                categoryId={category._id}
-                                onDone={() => {
-                                    setAddingItem(false)
-                                    setError(undefined)
-                                }}
-                            />
-                        )}
                         {categoryItems.length === 0 ? (
                             <p
                                 className="text-sm text-muted-foreground"
@@ -1198,163 +1402,154 @@ function MenuWorkspaceContent({ restaurant }: Props) {
                                 No active items in this category yet. Add one
                                 above.
                             </p>
-                        ) : (
-                            categoryItems.map((item) => (
-                                <div
-                                    key={item._id}
-                                    className="grid gap-3 rounded-xl border bg-card p-3 shadow-sm"
-                                >
-                                    <div className="flex flex-wrap items-center justify-between gap-2">
-                                        <div>
-                                            <div className="mb-3 aspect-[4/3] overflow-hidden rounded-lg bg-muted">
-                                                {item.imageUrl ? <img src={item.imageUrl} alt="" className="size-full object-cover" /> : <div className="grid size-full place-items-center text-sm text-muted-foreground">No image</div>}
-                                            </div>
-                                             <span className="font-medium tabular-nums">
-                                                {item.name} - {formatMinorCurrency(item.priceMinor)}
-                                            </span>
-                                            {item.description && (
-                                                <p className="text-sm text-muted-foreground">
-                                                    {item.description}
-                                                </p>
-                                            )}
-                                            <p className="text-sm text-muted-foreground">
-                                                <span className="mr-2 rounded-full bg-muted px-2 py-0.5">{item.available ? "Available" : "Unavailable"}</span>{item.archived && <span className="rounded-full bg-muted px-2 py-0.5">Archived</span>}
-                                            </p>
-                                        </div>
-                                        <div className="flex flex-wrap gap-1">
-                                            {!category.archived &&
-                                                !item.archived && (
-                                                    <>
-                                                        <Button
-                                                            type="button"
-                                                            size="sm"
-                                                            onClick={() =>
-                                                                void run(() =>
-                                                                    setAvailability(
-                                                                        {
-                                                                            itemId: item._id,
-                                                                            available:
-                                                                                !item.available,
-                                                                        }
-                                                                    )
-                                                                )
-                                                            }
-                                                            disabled={pending}
-                                                        >
-                                                            {item.available
-                                                                ? "Mark unavailable"
-                                                                : "Mark available"}
-                                                        </Button>
-                                                        <Button
-                                                            type="button"
-                                                            size="sm"
-                                                            variant="outline"
-                                                            onClick={() =>
-                                                                setEditingItem(
-                                                                    editingItem ===
-                                                                        item._id
-                                                                        ? undefined
-                                                                        : item._id
-                                                                )
-                                                            }
-                                                            disabled={pending}
-                                                        >
-                                                            {editingItem ===
-                                                            item._id
-                                                                ? "Close"
-                                                                : "Edit"}
-                                                        </Button>
-                                                        <Button
-                                                            type="button"
-                                                            size="sm"
-                                                            onClick={() => {
-                                                                 setConfirm({ kind: "item", id: item._id })
-                                                            }}
-                                                            disabled={pending}
-                                                        >
-                                                            Archive
-                                                        </Button>
-                                                        <Button
-                                                            type="button"
-                                                            size="sm"
-                                                             onClick={() =>
-                                                                 void moveItem(
-                                                                     category,
-                                                                     activeCategoryItems.findIndex(
-                                                                        (
-                                                                            entry
-                                                                        ) =>
-                                                                            entry._id ===
-                                                                            item._id
-                                                                    ),
-                                                                    -1
-                                                                )
-                                                            }
-                                                            disabled={pending}
-                                                        >
-                                                            Up
-                                                        </Button>
-                                                        <Button
-                                                            type="button"
-                                                            size="sm"
-                                                            onClick={() =>
-                                                                 void moveItem(
-                                                                     category,
-                                                                     activeCategoryItems.findIndex(
-                                                                        (
-                                                                            entry
-                                                                        ) =>
-                                                                            entry._id ===
-                                                                            item._id
-                                                                    ),
-                                                                    1
-                                                                )
-                                                            }
-                                                            disabled={pending}
-                                                        >
-                                                            Down
-                                                        </Button>
-                                                    </>
-                                                )}
-                                            {item.archived && (
-                                                <Button
-                                                    type="button"
-                                                    size="sm"
-                                                    onClick={() =>
-                                                        void run(() =>
-                                                            restoreItem({
-                                                                itemId: item._id,
-                                                            })
-                                                        )
-                                                    }
-                                                    disabled={pending}
-                                                >
-                                                    Restore
-                                                </Button>
-                                            )}
-                                        </div>
-                                    </div>
-                                    {!category.archived &&
-                                        !item.archived &&
-                                        editingItem === item._id && (
-                                            <ItemEditor
-                                                restaurantId={restaurant._id}
-                                                categoryId={category._id}
-                                                item={item}
-                                                onDone={() =>
-                                                    setEditingItem(undefined)
-                                                }
-                                            />
-                                        )}
-                                    {!item.archived && (
-                                        <OptionGroupsEditor item={item} />
-                                    )}
-                                </div>
-                            ))
-                        )}
+                         ) : (
+                             categoryItems.map((item) => (
+                                 <MenuItemCard
+                                     key={item._id}
+                                     item={item}
+                                     category={category}
+                                     currency={restaurant.currency}
+                                      onEdit={
+                                          !category.archived && !item.archived
+                                              ? () =>
+                                                   setFocusedEditor({
+                                                       kind: "item",
+                                                       id: item._id,
+                                                       categoryId: category._id,
+                                                   })
+                                              : undefined
+                                      }
+                                      onManageCategory={
+                                          !category.archived
+                                              ? () =>
+                                                    setFocusedEditor({
+                                                        kind: "category",
+                                                        id: category._id,
+                                                    })
+                                              : undefined
+                                      }
+                                      onToggleAvailability={
+                                         !category.archived && !item.archived
+                                             ? () =>
+                                                   void run(() =>
+                                                       setAvailability({
+                                                           itemId: item._id,
+                                                           available: !item.available,
+                                                       })
+                                                   )
+                                             : undefined
+                                     }
+                                 >
+                                     {!category.archived && !item.archived && (
+                                         <>
+                                             <Button
+                                                 type="button"
+                                                 size="sm"
+                                                 onClick={() =>
+                                                     setConfirm({ kind: "item", id: item._id })
+                                                 }
+                                                 disabled={pending}
+                                             >
+                                                 Archive
+                                             </Button>
+                                             <Button
+                                                 type="button"
+                                                 size="sm"
+                                                 onClick={() =>
+                                                     void moveItem(
+                                                         category,
+                                                         activeCategoryItems.findIndex(
+                                                             (entry) => entry._id === item._id
+                                                         ),
+                                                         -1
+                                                     )
+                                                 }
+                                                 disabled={pending}
+                                             >
+                                                 Up
+                                             </Button>
+                                             <Button
+                                                 type="button"
+                                                 size="sm"
+                                                 onClick={() =>
+                                                     void moveItem(
+                                                         category,
+                                                         activeCategoryItems.findIndex(
+                                                             (entry) => entry._id === item._id
+                                                         ),
+                                                         1
+                                                     )
+                                                 }
+                                                 disabled={pending}
+                                             >
+                                                 Down
+                                             </Button>
+                                         </>
+                                     )}
+                                     {item.archived && (
+                                         <Button
+                                             type="button"
+                                             size="sm"
+                                             onClick={() =>
+                                                 void run(() => restoreItem({ itemId: item._id }))
+                                             }
+                                             disabled={pending}
+                                         >
+                                             Restore
+                                         </Button>
+                                     )}
+                                 </MenuItemCard>
+                             ))
+                         )}
                     </CardContent>
                 </Card>
              ) : null}
+              {isDesktop && visibleFocusedEditor ? (
+                  <aside className="grid min-w-0 max-w-full gap-4 overflow-x-hidden rounded-lg border bg-card p-4 shadow-sm md:fixed md:right-4 md:top-20 md:z-10 md:w-[28rem] md:max-w-[calc(100vw-2rem)] md:max-h-[calc(100vh-6rem)] md:overflow-y-auto">
+                      <FocusedEditorContent
+                          restaurantId={restaurant._id}
+                          focusedEditor={visibleFocusedEditor}
+                          focusedCategory={focusedCategory}
+                          focusedItem={focusedItem}
+                          onDone={() => setFocusedEditor(undefined)}
+                      />
+                  </aside>
+              ) : (
+                  <Sheet
+                      open={Boolean(visibleFocusedEditor)}
+                      onOpenChange={(open) => !open && setFocusedEditor(undefined)}
+                  >
+                      <SheetContent
+                          side="right"
+                          className="w-full min-w-0 overflow-y-auto sm:max-w-md md:w-[28rem]"
+                      >
+                          <SheetHeader>
+                              <SheetTitle>
+                                  {visibleFocusedEditor?.kind === "category"
+                                      ? focusedCategory
+                                          ? `Edit ${focusedCategory.name}`
+                                          : "Add category"
+                                      : focusedItem
+                                        ? `Edit ${focusedItem.name}`
+                                        : "Add menu item"}
+                              </SheetTitle>
+                              <SheetDescription>
+                                  Keep this editor focused while you manage the catalog.
+                              </SheetDescription>
+                          </SheetHeader>
+                          {visibleFocusedEditor && (
+                              <FocusedEditorContent
+                                  restaurantId={restaurant._id}
+                                  focusedEditor={visibleFocusedEditor}
+                                  focusedCategory={focusedCategory}
+                                  focusedItem={focusedItem}
+                                  onDone={() => setFocusedEditor(undefined)}
+                                  showHeading={false}
+                              />
+                          )}
+                      </SheetContent>
+                  </Sheet>
+              )}
              <ConfirmDialog
                  open={Boolean(confirm)}
                  onOpenChange={(open) => !open && setConfirm(undefined)}
@@ -1373,7 +1568,16 @@ function MenuWorkspaceContent({ restaurant }: Props) {
                                 })
                       )
                       if (!succeeded) throw new Error("Unable to complete this action.")
-                      setConfirm(undefined)
+                       if (confirm.kind === "category") {
+                           setCategoryFilter("all")
+                           if (selected === confirm.id) setSelected(undefined)
+                           if (
+                               focusedEditor?.kind === "category" &&
+                               focusedEditor.id === confirm.id
+                           )
+                               setFocusedEditor(undefined)
+                       }
+                       setConfirm(undefined)
                   }}
              />
         </section>
