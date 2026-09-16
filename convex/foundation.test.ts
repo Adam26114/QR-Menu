@@ -183,11 +183,13 @@ test("revoked membership denies protected restaurant reads", async () => {
             .withIndex("by_restaurant_id_and_token_identifier", (q) =>
                 q
                     .eq("restaurantId", restaurantId)
-            .eq("tokenIdentifier", "issuer|revoked-owner")
+                    .eq("tokenIdentifier", "issuer|revoked-owner")
             )
             .unique()
         if (!membership) {
-            throw new Error("Test setup error: owner membership was not created")
+            throw new Error(
+                "Test setup error: owner membership was not created"
+            )
         }
         await ctx.db.patch(membership._id, { status: "revoked" })
     })

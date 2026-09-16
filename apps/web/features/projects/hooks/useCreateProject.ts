@@ -8,4 +8,6 @@ import { projectsApi } from "../api/projects"
  * WHY: Create pending state stays independent from row operations.
  * WHERE: ProjectsView uses this hook for the create form.
  */
-export function useCreateProject() { return useMutation(projectsApi.create) }
+export function useCreateProject() {
+    return useMutation(projectsApi.create)
+}

@@ -8,5 +8,5 @@ import type { AuthConfig } from "convex/server"
  * WHERE: Convex deployment reads this provider configuration.
  */
 export default {
-  providers: [getAuthConfigProvider()],
+    providers: [getAuthConfigProvider()],
 } satisfies AuthConfig

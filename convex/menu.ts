@@ -392,13 +392,27 @@ export const updateItem = protectedMutation({
             if (a.imageStorageId !== null) {
                 const ownership = await ctx.db
                     .query("storageUploads")
-                    .withIndex("by_storage_id", (q) => q.eq("storageId", a.imageStorageId!))
+                    .withIndex("by_storage_id", (q) =>
+                        q.eq("storageId", a.imageStorageId!)
+                    )
                     .unique()
-                if (!ownership || ownership.restaurantId !== x.restaurantId || ownership.itemId !== a.itemId)
-                    throw expectedError(ERROR_CODES.FORBIDDEN, "Image storage is not owned by this restaurant")
+                if (
+                    !ownership ||
+                    ownership.restaurantId !== x.restaurantId ||
+                    ownership.itemId !== a.itemId
+                )
+                    throw expectedError(
+                        ERROR_CODES.FORBIDDEN,
+                        "Image storage is not owned by this restaurant"
+                    )
                 p.imageStorageId = a.imageStorageId
             } else {
-                if (x.imageStorageId) await removeOwnedStorage(ctx, x.restaurantId, x.imageStorageId)
+                if (x.imageStorageId)
+                    await removeOwnedStorage(
+                        ctx,
+                        x.restaurantId,
+                        x.imageStorageId
+                    )
                 p.imageStorageId = undefined
             }
         await ctx.db.patch(a.itemId, p)
@@ -722,7 +736,10 @@ export const restoreOptionChoice = protectedMutation({
 
 export const generateImageUploadUrl = protectedMutation({
     args: { itemId: v.id("menuItems") },
-    returns: v.object({ url: v.string(), capability: v.id("pendingStorageUploads") }),
+    returns: v.object({
+        url: v.string(),
+        capability: v.id("pendingStorageUploads"),
+    }),
     handler: async (ctx, a) => {
         const itemRow = await getItem(ctx, a.itemId)
         await owner(ctx, itemRow.restaurantId)
@@ -734,7 +751,10 @@ export const generateImageUploadUrl = protectedMutation({
             expiresAt: Date.now() + 15 * 60 * 1000,
             createdAt: Date.now(),
         })
-        return { url: await ctx.storage.generateUploadUrl(), capability: pending }
+        return {
+            url: await ctx.storage.generateUploadUrl(),
+            capability: pending,
+        }
     },
 })
 export const bindImageUpload = protectedMutation({
@@ -756,19 +776,28 @@ export const bindImageUpload = protectedMutation({
             pending.uploadedByTokenIdentifier !== identity.tokenIdentifier ||
             pending.expiresAt < Date.now()
         ) {
-            throw expectedError(ERROR_CODES.FORBIDDEN, "Upload is not authorized")
+            throw expectedError(
+                ERROR_CODES.FORBIDDEN,
+                "Upload is not authorized"
+            )
         }
         if (pending.storageId)
             throw expectedError(ERROR_CODES.CONFLICT, "Upload is already bound")
         const storageUrl = await ctx.storage.getUrl(a.storageId)
         if (!storageUrl)
-            throw expectedError(ERROR_CODES.NOT_FOUND, "Uploaded image not found")
+            throw expectedError(
+                ERROR_CODES.NOT_FOUND,
+                "Uploaded image not found"
+            )
         const existing = await ctx.db
             .query("storageUploads")
             .withIndex("by_storage_id", (q) => q.eq("storageId", a.storageId))
             .unique()
         if (existing)
-            throw expectedError(ERROR_CODES.CONFLICT, "Image is already attached")
+            throw expectedError(
+                ERROR_CODES.CONFLICT,
+                "Image is already attached"
+            )
         const referenced = await ctx.db
             .query("menuItems")
             .withIndex("by_image_storage_id", (q) =>
@@ -776,45 +805,139 @@ export const bindImageUpload = protectedMutation({
             )
             .take(2)
         if (referenced.length > 0)
-            throw expectedError(ERROR_CODES.CONFLICT, "Image is already attached")
+            throw expectedError(
+                ERROR_CODES.CONFLICT,
+                "Image is already attached"
+            )
         await ctx.db.patch(a.capability, { storageId: a.storageId })
         return null
     },
 })
 export const attachImage = protectedMutation({
-    args: { itemId: v.id("menuItems"), storageId: v.id("_storage"), capability: v.id("pendingStorageUploads") },
+    args: {
+        itemId: v.id("menuItems"),
+        storageId: v.id("_storage"),
+        capability: v.id("pendingStorageUploads"),
+    },
     returns: item,
     handler: async (ctx, a) => {
-        const itemRow = await getItem(ctx, a.itemId); await owner(ctx, itemRow.restaurantId)
+        const itemRow = await getItem(ctx, a.itemId)
+        await owner(ctx, itemRow.restaurantId)
         const identity = await requireIdentity(ctx)
         const pending = await ctx.db.get(a.capability)
-        if (!pending || pending.restaurantId !== itemRow.restaurantId || pending.itemId !== a.itemId || pending.uploadedByTokenIdentifier !== identity.tokenIdentifier || pending.expiresAt < Date.now() || pending.storageId !== a.storageId) {
-            throw expectedError(ERROR_CODES.FORBIDDEN, "Upload is not authorized")
+        if (
+            !pending ||
+            pending.restaurantId !== itemRow.restaurantId ||
+            pending.itemId !== a.itemId ||
+            pending.uploadedByTokenIdentifier !== identity.tokenIdentifier ||
+            pending.expiresAt < Date.now() ||
+            pending.storageId !== a.storageId
+        ) {
+            throw expectedError(
+                ERROR_CODES.FORBIDDEN,
+                "Upload is not authorized"
+            )
         }
         // Convex does not expose upload-token provenance for a blob. The
         // one-time token, owner, tenant, existence, and indexed ownership
         // checks below are the strongest available invariant.
         const storageUrl = await ctx.storage.getUrl(a.storageId)
-        if (!storageUrl) throw expectedError(ERROR_CODES.NOT_FOUND, "Uploaded image not found")
-        const existing = await ctx.db.query("storageUploads").withIndex("by_storage_id", (q) => q.eq("storageId", a.storageId)).unique()
-        if (existing) throw expectedError(ERROR_CODES.CONFLICT, "Image is already attached")
-        const referenced = await ctx.db.query("menuItems").withIndex("by_image_storage_id", (q) => q.eq("imageStorageId", a.storageId)).take(2)
-        if (referenced.length > 0) throw expectedError(ERROR_CODES.CONFLICT, "Image is already attached")
-        if (itemRow.imageStorageId) await removeOwnedStorage(ctx, itemRow.restaurantId, itemRow.imageStorageId)
-        await ctx.db.insert("storageUploads", { storageId: a.storageId, restaurantId: itemRow.restaurantId, uploadedByTokenIdentifier: identity.tokenIdentifier, itemId: a.itemId, createdAt: Date.now() })
+        if (!storageUrl)
+            throw expectedError(
+                ERROR_CODES.NOT_FOUND,
+                "Uploaded image not found"
+            )
+        const existing = await ctx.db
+            .query("storageUploads")
+            .withIndex("by_storage_id", (q) => q.eq("storageId", a.storageId))
+            .unique()
+        if (existing)
+            throw expectedError(
+                ERROR_CODES.CONFLICT,
+                "Image is already attached"
+            )
+        const referenced = await ctx.db
+            .query("menuItems")
+            .withIndex("by_image_storage_id", (q) =>
+                q.eq("imageStorageId", a.storageId)
+            )
+            .take(2)
+        if (referenced.length > 0)
+            throw expectedError(
+                ERROR_CODES.CONFLICT,
+                "Image is already attached"
+            )
+        if (itemRow.imageStorageId)
+            await removeOwnedStorage(
+                ctx,
+                itemRow.restaurantId,
+                itemRow.imageStorageId
+            )
+        await ctx.db.insert("storageUploads", {
+            storageId: a.storageId,
+            restaurantId: itemRow.restaurantId,
+            uploadedByTokenIdentifier: identity.tokenIdentifier,
+            itemId: a.itemId,
+            createdAt: Date.now(),
+        })
         await ctx.db.delete("pendingStorageUploads", pending._id)
-        await ctx.db.patch(a.itemId, { imageStorageId: a.storageId, updatedAt: Date.now() })
+        await ctx.db.patch(a.itemId, {
+            imageStorageId: a.storageId,
+            updatedAt: Date.now(),
+        })
         return getItem(ctx, a.itemId)
     },
 })
-async function removeOwnedStorage(ctx: MutationCtx, restaurantId: Id<"restaurants">, storageId: Id<"_storage">) {
-    const ownership = await ctx.db.query("storageUploads").withIndex("by_storage_id", (q) => q.eq("storageId", storageId)).unique()
+async function removeOwnedStorage(
+    ctx: MutationCtx,
+    restaurantId: Id<"restaurants">,
+    storageId: Id<"_storage">
+) {
+    const ownership = await ctx.db
+        .query("storageUploads")
+        .withIndex("by_storage_id", (q) => q.eq("storageId", storageId))
+        .unique()
     if (ownership?.restaurantId !== restaurantId) return
     await ctx.db.delete("storageUploads", ownership._id)
     await ctx.storage.delete(storageId)
 }
-export const removeImage = protectedMutation({ args: { itemId: v.id("menuItems") }, returns: item, handler: async (ctx, a) => { const row = await getItem(ctx, a.itemId); await owner(ctx, row.restaurantId); if (row.imageStorageId) await removeOwnedStorage(ctx, row.restaurantId, row.imageStorageId); await ctx.db.patch(a.itemId, { imageStorageId: undefined, updatedAt: Date.now() }); return getItem(ctx, a.itemId) } })
-export const resolveImageUrl = protectedQuery({ args: { itemId: v.id("menuItems") }, returns: v.union(v.string(), v.null()), handler: async (ctx, a) => { const row = await getItem(ctx, a.itemId); await member(ctx, row.restaurantId); if (!row.imageStorageId) return null; const ownership = await ctx.db.query("storageUploads").withIndex("by_storage_id", (q) => q.eq("storageId", row.imageStorageId!)).unique(); if (!ownership || ownership.restaurantId !== row.restaurantId || ownership.itemId !== a.itemId) return null; return ctx.storage.getUrl(row.imageStorageId) } })
+export const removeImage = protectedMutation({
+    args: { itemId: v.id("menuItems") },
+    returns: item,
+    handler: async (ctx, a) => {
+        const row = await getItem(ctx, a.itemId)
+        await owner(ctx, row.restaurantId)
+        if (row.imageStorageId)
+            await removeOwnedStorage(ctx, row.restaurantId, row.imageStorageId)
+        await ctx.db.patch(a.itemId, {
+            imageStorageId: undefined,
+            updatedAt: Date.now(),
+        })
+        return getItem(ctx, a.itemId)
+    },
+})
+export const resolveImageUrl = protectedQuery({
+    args: { itemId: v.id("menuItems") },
+    returns: v.union(v.string(), v.null()),
+    handler: async (ctx, a) => {
+        const row = await getItem(ctx, a.itemId)
+        await member(ctx, row.restaurantId)
+        if (!row.imageStorageId) return null
+        const ownership = await ctx.db
+            .query("storageUploads")
+            .withIndex("by_storage_id", (q) =>
+                q.eq("storageId", row.imageStorageId!)
+            )
+            .unique()
+        if (
+            !ownership ||
+            ownership.restaurantId !== row.restaurantId ||
+            ownership.itemId !== a.itemId
+        )
+            return null
+        return ctx.storage.getUrl(row.imageStorageId)
+    },
+})
 
 export const cleanupStorage = internalMutation({
     args: { limit: v.number() },
@@ -830,7 +953,9 @@ export const cleanupStorage = internalMutation({
             if (row.storageId) {
                 const ownership = await ctx.db
                     .query("storageUploads")
-                    .withIndex("by_storage_id", (q) => q.eq("storageId", row.storageId!))
+                    .withIndex("by_storage_id", (q) =>
+                        q.eq("storageId", row.storageId!)
+                    )
                     .unique()
                 if (ownership) await ctx.db.delete(ownership._id)
                 if (await ctx.storage.getUrl(row.storageId))
@@ -838,11 +963,22 @@ export const cleanupStorage = internalMutation({
             }
             await ctx.db.delete(row._id)
         }
-        const owned = await ctx.db.query("storageUploads").withIndex("by_restaurant_id", (q) => q).take(limit)
+        const owned = await ctx.db
+            .query("storageUploads")
+            .withIndex("by_restaurant_id", (q) => q)
+            .take(limit)
         let storageDeleted = 0
         for (const row of owned) {
             const item = await ctx.db.get("menuItems", row.itemId)
-            if (!item || item.restaurantId !== row.restaurantId || item.imageStorageId !== row.storageId) { await ctx.db.delete(row._id); await ctx.storage.delete(row.storageId); storageDeleted++ }
+            if (
+                !item ||
+                item.restaurantId !== row.restaurantId ||
+                item.imageStorageId !== row.storageId
+            ) {
+                await ctx.db.delete(row._id)
+                await ctx.storage.delete(row.storageId)
+                storageDeleted++
+            }
         }
         return { storageDeleted }
     },

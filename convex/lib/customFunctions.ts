@@ -1,7 +1,7 @@
 import {
-  customAction,
-  customMutation,
-  customQuery,
+    customAction,
+    customMutation,
+    customQuery,
 } from "convex-helpers/server/customFunctions"
 import { action, mutation, query } from "../_generated/server"
 import { expectedError, ERROR_CODES } from "./errors"
@@ -14,15 +14,18 @@ import type { UserIdentity } from "convex/server"
  * WHERE: Public domain APIs build all user-data queries and mutations from these wrappers.
  */
 const identityInput = {
-  args: {},
-  input: async (ctx: {
-    auth: { getUserIdentity: () => Promise<UserIdentity | null> }
-  }) => {
-    const identity = await ctx.auth.getUserIdentity()
-    if (!identity)
-      throw expectedError(ERROR_CODES.AUTH_REQUIRED, "Authentication required")
-    return { ctx: { identity }, args: {} }
-  },
+    args: {},
+    input: async (ctx: {
+        auth: { getUserIdentity: () => Promise<UserIdentity | null> }
+    }) => {
+        const identity = await ctx.auth.getUserIdentity()
+        if (!identity)
+            throw expectedError(
+                ERROR_CODES.AUTH_REQUIRED,
+                "Authentication required"
+            )
+        return { ctx: { identity }, args: {} }
+    },
 }
 
 export const protectedQuery = customQuery(query, identityInput)

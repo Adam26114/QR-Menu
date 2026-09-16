@@ -489,44 +489,141 @@ test("reorder accepts 200 active records and rejects 201", async () => {
 
 test("image upload capabilities are owner-only and item-scoped", async () => {
     const t = convexTest(schema, modules)
-    const owner = t.withIdentity({ subject: "upload-owner", tokenIdentifier: "issuer|upload-owner" })
-    const staff = t.withIdentity({ subject: "upload-staff", tokenIdentifier: "issuer|upload-staff" })
-    const other = t.withIdentity({ subject: "upload-other", tokenIdentifier: "issuer|upload-other" })
-    const restaurantId = await owner.mutation(api.restaurants.create, { name: "Upload Cafe", slug: "upload-cafe", idempotencyKey: "upload-cafe" })
-    await t.run(async (ctx) => {
-        await ctx.db.insert("restaurantMemberships", { restaurantId, tokenIdentifier: "issuer|upload-staff", role: "staff", status: "active", canMarkPaid: false, createdAt: 1, updatedAt: 1 })
+    const owner = t.withIdentity({
+        subject: "upload-owner",
+        tokenIdentifier: "issuer|upload-owner",
     })
-    const categoryId = await owner.mutation(api.menu.createCategory, { restaurantId, name: "Mains" })
-    const itemId = await owner.mutation(api.menu.createItem, { restaurantId, categoryId, name: "Rice", priceMinor: 500 })
-    const otherItemId = await owner.mutation(api.menu.createItem, { restaurantId, categoryId, name: "Soup", priceMinor: 400 })
-    await expect(staff.mutation(api.menu.generateImageUploadUrl, { itemId })).rejects.toThrow("FORBIDDEN")
-    await expect(other.mutation(api.menu.generateImageUploadUrl, { itemId })).rejects.toThrow("FORBIDDEN")
-    const result = await owner.mutation(api.menu.generateImageUploadUrl, { itemId })
+    const staff = t.withIdentity({
+        subject: "upload-staff",
+        tokenIdentifier: "issuer|upload-staff",
+    })
+    const other = t.withIdentity({
+        subject: "upload-other",
+        tokenIdentifier: "issuer|upload-other",
+    })
+    const restaurantId = await owner.mutation(api.restaurants.create, {
+        name: "Upload Cafe",
+        slug: "upload-cafe",
+        idempotencyKey: "upload-cafe",
+    })
+    await t.run(async (ctx) => {
+        await ctx.db.insert("restaurantMemberships", {
+            restaurantId,
+            tokenIdentifier: "issuer|upload-staff",
+            role: "staff",
+            status: "active",
+            canMarkPaid: false,
+            createdAt: 1,
+            updatedAt: 1,
+        })
+    })
+    const categoryId = await owner.mutation(api.menu.createCategory, {
+        restaurantId,
+        name: "Mains",
+    })
+    const itemId = await owner.mutation(api.menu.createItem, {
+        restaurantId,
+        categoryId,
+        name: "Rice",
+        priceMinor: 500,
+    })
+    const otherItemId = await owner.mutation(api.menu.createItem, {
+        restaurantId,
+        categoryId,
+        name: "Soup",
+        priceMinor: 400,
+    })
+    await expect(
+        staff.mutation(api.menu.generateImageUploadUrl, { itemId })
+    ).rejects.toThrow("FORBIDDEN")
+    await expect(
+        other.mutation(api.menu.generateImageUploadUrl, { itemId })
+    ).rejects.toThrow("FORBIDDEN")
+    const result = await owner.mutation(api.menu.generateImageUploadUrl, {
+        itemId,
+    })
     expect(result.url).toEqual(expect.any(String))
     expect(result.capability).toEqual(expect.any(String))
     const storageId = itemId.replace(/menuItems$/, "_storage") as Id<"_storage">
-    await expect(owner.mutation(api.menu.bindImageUpload, { itemId: otherItemId, storageId, capability: result.capability })).rejects.toThrow("FORBIDDEN")
-    await expect(other.mutation(api.menu.attachImage, { itemId, storageId, capability: result.capability })).rejects.toThrow("FORBIDDEN")
-    await expect(staff.mutation(api.menu.attachImage, { itemId, storageId, capability: result.capability })).rejects.toThrow("FORBIDDEN")
+    await expect(
+        owner.mutation(api.menu.bindImageUpload, {
+            itemId: otherItemId,
+            storageId,
+            capability: result.capability,
+        })
+    ).rejects.toThrow("FORBIDDEN")
+    await expect(
+        other.mutation(api.menu.attachImage, {
+            itemId,
+            storageId,
+            capability: result.capability,
+        })
+    ).rejects.toThrow("FORBIDDEN")
+    await expect(
+        staff.mutation(api.menu.attachImage, {
+            itemId,
+            storageId,
+            capability: result.capability,
+        })
+    ).rejects.toThrow("FORBIDDEN")
 })
 
 test("expired capabilities are rejected and stale image URLs resolve null", async () => {
     const t = convexTest(schema, modules)
-    const owner = t.withIdentity({ subject: "expired-owner", tokenIdentifier: "issuer|expired-owner" })
-    const restaurantId = await owner.mutation(api.restaurants.create, { name: "Expired Cafe", slug: "expired-cafe", idempotencyKey: "expired-cafe" })
-    const categoryId = await owner.mutation(api.menu.createCategory, { restaurantId, name: "Mains" })
-    const itemId = await owner.mutation(api.menu.createItem, { restaurantId, categoryId, name: "Soup", priceMinor: 400 })
+    const owner = t.withIdentity({
+        subject: "expired-owner",
+        tokenIdentifier: "issuer|expired-owner",
+    })
+    const restaurantId = await owner.mutation(api.restaurants.create, {
+        name: "Expired Cafe",
+        slug: "expired-cafe",
+        idempotencyKey: "expired-cafe",
+    })
+    const categoryId = await owner.mutation(api.menu.createCategory, {
+        restaurantId,
+        name: "Mains",
+    })
+    const itemId = await owner.mutation(api.menu.createItem, {
+        restaurantId,
+        categoryId,
+        name: "Soup",
+        priceMinor: 400,
+    })
     const storageId = itemId.replace(/menuItems$/, "_storage") as Id<"_storage">
-    const capability = await t.run(async (ctx) => ctx.db.insert("pendingStorageUploads", { restaurantId, uploadedByTokenIdentifier: "issuer|expired-owner", itemId, storageId, expiresAt: 0, createdAt: 0 }))
-    await expect(owner.mutation(api.menu.attachImage, { itemId, storageId, capability })).rejects.toThrow("FORBIDDEN")
+    const capability = await t.run(async (ctx) =>
+        ctx.db.insert("pendingStorageUploads", {
+            restaurantId,
+            uploadedByTokenIdentifier: "issuer|expired-owner",
+            itemId,
+            storageId,
+            expiresAt: 0,
+            createdAt: 0,
+        })
+    )
+    await expect(
+        owner.mutation(api.menu.attachImage, { itemId, storageId, capability })
+    ).rejects.toThrow("FORBIDDEN")
     await t.run(async (ctx) => {
-        await ctx.db.insert("storageUploads", { storageId, restaurantId, uploadedByTokenIdentifier: "issuer|expired-owner", itemId, createdAt: 0 })
+        await ctx.db.insert("storageUploads", {
+            storageId,
+            restaurantId,
+            uploadedByTokenIdentifier: "issuer|expired-owner",
+            itemId,
+            createdAt: 0,
+        })
         await ctx.db.patch(itemId, { imageStorageId: storageId })
     })
-    await expect(owner.query(api.menu.resolveImageUrl, { itemId })).resolves.toBeNull()
+    await expect(
+        owner.query(api.menu.resolveImageUrl, { itemId })
+    ).resolves.toBeNull()
     await t.mutation(internal.menu.cleanupStorage, { limit: 100 })
     await t.run(async (ctx) => {
         expect(await ctx.db.get(capability)).toBeNull()
-        expect(await ctx.db.query("storageUploads").withIndex("by_storage_id", (q) => q.eq("storageId", storageId)).unique()).toBeNull()
+        expect(
+            await ctx.db
+                .query("storageUploads")
+                .withIndex("by_storage_id", (q) => q.eq("storageId", storageId))
+                .unique()
+        ).toBeNull()
     })
 })

@@ -114,16 +114,23 @@ function TableLink({ slug, token }: { slug: string; token: string }) {
         setPrintError(undefined)
         const printWindow = window.open("", "_blank")
         if (!printWindow) {
-            setPrintError("Unable to open the print preview. Allow pop-ups and try again.")
+            setPrintError(
+                "Unable to open the print preview. Allow pop-ups and try again."
+            )
             return
         }
         const qrMarkup = qrRef.current?.outerHTML
         if (!qrMarkup) {
             printWindow.close()
-            setPrintError("Unable to prepare the QR code for printing. Try again.")
+            setPrintError(
+                "Unable to prepare the QR code for printing. Try again."
+            )
             return
         }
-        const escapedUrl = url.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;")
+        const escapedUrl = url
+            .replaceAll("&", "&amp;")
+            .replaceAll("<", "&lt;")
+            .replaceAll(">", "&gt;")
         printWindow.document.write(
             `<title>Table link</title><main style="font-family: sans-serif; padding: 32px; text-align: center"><h1>Scan to order</h1>${qrMarkup}<p style="font-family: monospace; overflow-wrap: anywhere">${escapedUrl}</p></main>`
         )
@@ -152,11 +159,12 @@ function TableLink({ slug, token }: { slug: string; token: string }) {
                     />
                 </div>
                 <div className="min-w-0 flex-1">
-                    <p className="break-all rounded-md border bg-muted/30 px-3 py-2 font-mono text-xs text-muted-foreground">
+                    <p className="rounded-md border bg-muted/30 px-3 py-2 font-mono text-xs break-all text-muted-foreground">
                         {url}
                     </p>
                     <p className="mt-2 text-xs text-muted-foreground">
-                        Guests can scan this code to open the table ordering page.
+                        Guests can scan this code to open the table ordering
+                        page.
                     </p>
                 </div>
             </div>
@@ -165,13 +173,29 @@ function TableLink({ slug, token }: { slug: string; token: string }) {
                 No internal IDs are exposed.
             </p>
             <div className="flex flex-wrap gap-2">
-                <Button type="button" size="sm" variant="outline" onClick={copy}>
-                    <Copy aria-hidden="true" /> {copied ? "Copied" : "Copy link"}
+                <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={copy}
+                >
+                    <Copy aria-hidden="true" />{" "}
+                    {copied ? "Copied" : "Copy link"}
                 </Button>
-                <Button type="button" size="sm" variant="outline" onClick={downloadQr}>
+                <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={downloadQr}
+                >
                     <Download aria-hidden="true" /> Download QR
                 </Button>
-                <Button type="button" size="sm" variant="outline" onClick={print}>
+                <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={print}
+                >
                     <Printer aria-hidden="true" /> Print
                 </Button>
                 <a
@@ -180,10 +204,15 @@ function TableLink({ slug, token }: { slug: string; token: string }) {
                     target="_blank"
                     rel="noreferrer"
                 >
-                    <ExternalLink className="size-3.5" aria-hidden="true" /> Open
+                    <ExternalLink className="size-3.5" aria-hidden="true" />{" "}
+                    Open
                 </a>
             </div>
-            {printError && <p role="alert" className="text-sm text-destructive">{printError}</p>}
+            {printError && (
+                <p role="alert" className="text-sm text-destructive">
+                    {printError}
+                </p>
+            )}
         </div>
     )
 }
@@ -208,7 +237,9 @@ function TableRow({ table, slug }: { table: Table; slug: string }) {
         try {
             await action()
         } catch (cause) {
-            setError(friendlyError(cause, "Unable to update this table. Try again."))
+            setError(
+                friendlyError(cause, "Unable to update this table. Try again.")
+            )
             return false
         } finally {
             setPending(false)
@@ -222,20 +253,29 @@ function TableRow({ table, slug }: { table: Table; slug: string }) {
             setError("Use a table name before saving.")
             return
         }
-        const saved = await run(() => rename({ tableId: table._id, name: name.trim() }))
+        const saved = await run(() =>
+            rename({ tableId: table._id, name: name.trim() })
+        )
         if (saved) setEditing(false)
     }
 
     const hiddenLink = table.archived || !table.active
     return (
-        <article className={`grid gap-4 rounded-xl border p-4 ${table.archived ? "bg-muted/20 opacity-80" : "bg-card"}`}>
+        <article
+            className={`grid gap-4 rounded-xl border p-4 ${table.archived ? "bg-muted/20 opacity-80" : "bg-card"}`}
+        >
             <div className="flex flex-wrap items-start justify-between gap-3">
                 <div className="min-w-0">
                     {editing ? (
-                        <form className="flex flex-wrap gap-2" onSubmit={saveName}>
+                        <form
+                            className="flex flex-wrap gap-2"
+                            onSubmit={saveName}
+                        >
                             <Input
                                 value={name}
-                                onChange={(event) => setName(event.target.value)}
+                                onChange={(event) =>
+                                    setName(event.target.value)
+                                }
                                 aria-label={`Name for ${table.name}`}
                                 className="h-8 w-48"
                                 autoFocus
@@ -243,70 +283,179 @@ function TableRow({ table, slug }: { table: Table; slug: string }) {
                             <Button type="submit" size="sm" disabled={pending}>
                                 {pending ? "Saving..." : "Save"}
                             </Button>
-                            <Button type="button" size="sm" variant="ghost" onClick={() => setEditing(false)} disabled={pending}>
+                            <Button
+                                type="button"
+                                size="sm"
+                                variant="ghost"
+                                onClick={() => setEditing(false)}
+                                disabled={pending}
+                            >
                                 Cancel
                             </Button>
                         </form>
                     ) : (
                         <h3 className="flex items-center gap-2 font-semibold tracking-tight">
                             {table.name}
-                            {table.archived && <span className="text-xs font-normal text-muted-foreground">Archived</span>}
+                            {table.archived && (
+                                <span className="text-xs font-normal text-muted-foreground">
+                                    Archived
+                                </span>
+                            )}
                         </h3>
                     )}
                     <p className="mt-1 text-sm text-muted-foreground">
-                        {table.archived ? "Archived and not available for ordering." : table.active ? "Active for guest ordering." : "Inactive; guest ordering is paused."}
+                        {table.archived
+                            ? "Archived and not available for ordering."
+                            : table.active
+                              ? "Active for guest ordering."
+                              : "Inactive; guest ordering is paused."}
                     </p>
                 </div>
                 <div className="flex flex-wrap gap-2">
                     {!table.archived && (
                         <>
-                            <Button type="button" size="sm" variant="outline" onClick={() => setEditing((value) => !value)} disabled={pending}>
-                                <Pencil aria-hidden="true" /> {editing ? "Close" : "Rename"}
+                            <Button
+                                type="button"
+                                size="sm"
+                                variant="outline"
+                                onClick={() => setEditing((value) => !value)}
+                                disabled={pending}
+                            >
+                                <Pencil aria-hidden="true" />{" "}
+                                {editing ? "Close" : "Rename"}
                             </Button>
-                            <Button type="button" size="sm" variant="outline" onClick={() => void run(() => setActive({ tableId: table._id, active: !table.active }).then(() => { if (!table.active) setToken(undefined) }))} disabled={pending}>
+                            <Button
+                                type="button"
+                                size="sm"
+                                variant="outline"
+                                onClick={() =>
+                                    void run(() =>
+                                        setActive({
+                                            tableId: table._id,
+                                            active: !table.active,
+                                        }).then(() => {
+                                            if (!table.active)
+                                                setToken(undefined)
+                                        })
+                                    )
+                                }
+                                disabled={pending}
+                            >
                                 {table.active ? "Deactivate" : "Activate"}
                             </Button>
-                            <Button type="button" size="sm" variant="destructive" onClick={() => { if (window.confirm(`Archive ${table.name}? You can restore it later.`)) void run(() => archive({ tableId: table._id }).then(() => setToken(undefined))) }} disabled={pending}>
+                            <Button
+                                type="button"
+                                size="sm"
+                                variant="destructive"
+                                onClick={() => {
+                                    if (
+                                        window.confirm(
+                                            `Archive ${table.name}? You can restore it later.`
+                                        )
+                                    )
+                                        void run(() =>
+                                            archive({
+                                                tableId: table._id,
+                                            }).then(() => setToken(undefined))
+                                        )
+                                }}
+                                disabled={pending}
+                            >
                                 <Archive aria-hidden="true" /> Archive
                             </Button>
                         </>
                     )}
                     {table.archived && (
-                        <Button type="button" size="sm" onClick={() => void run(() => restore({ tableId: table._id }))} disabled={pending}>
+                        <Button
+                            type="button"
+                            size="sm"
+                            onClick={() =>
+                                void run(() => restore({ tableId: table._id }))
+                            }
+                            disabled={pending}
+                        >
                             <RotateCcw aria-hidden="true" /> Restore
                         </Button>
                     )}
                 </div>
             </div>
-            {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
+            {error && (
+                <p role="alert" className="text-sm text-destructive">
+                    {error}
+                </p>
+            )}
             {!hiddenLink && (
                 <div className="flex flex-wrap items-center gap-2 border-t pt-3">
                     {token ? (
                         <TableLink slug={slug} token={token} />
                     ) : (
-                        <Button type="button" size="sm" variant="secondary" onClick={() => void run(async () => setToken(await getToken({ tableId: table._id })))} disabled={pending}>
-                            <Link2 aria-hidden="true" /> {pending ? "Loading link..." : "Reveal ordering link"}
+                        <Button
+                            type="button"
+                            size="sm"
+                            variant="secondary"
+                            onClick={() =>
+                                void run(async () =>
+                                    setToken(
+                                        await getToken({ tableId: table._id })
+                                    )
+                                )
+                            }
+                            disabled={pending}
+                        >
+                            <Link2 aria-hidden="true" />{" "}
+                            {pending
+                                ? "Loading link..."
+                                : "Reveal ordering link"}
                         </Button>
                     )}
                     {token && (
-                        <Button type="button" size="sm" variant="ghost" onClick={() => void run(async () => { setToken(undefined); const result = await regenerate({ tableId: table._id }); setToken(result.token) })} disabled={pending}>
+                        <Button
+                            type="button"
+                            size="sm"
+                            variant="ghost"
+                            onClick={() =>
+                                void run(async () => {
+                                    setToken(undefined)
+                                    const result = await regenerate({
+                                        tableId: table._id,
+                                    })
+                                    setToken(result.token)
+                                })
+                            }
+                            disabled={pending}
+                        >
                             {pending ? "Regenerating..." : "Regenerate token"}
                         </Button>
                     )}
                 </div>
             )}
-            {hiddenLink && <p role="status" className="border-t pt-3 text-xs text-muted-foreground">{table.archived ? "Restore this table to manage its ordering link." : "Activate this table to manage its ordering link."}</p>}
+            {hiddenLink && (
+                <p
+                    role="status"
+                    className="border-t pt-3 text-xs text-muted-foreground"
+                >
+                    {table.archived
+                        ? "Restore this table to manage its ordering link."
+                        : "Activate this table to manage its ordering link."}
+                </p>
+            )}
         </article>
     )
 }
 
 function TablesWorkspaceContent({ restaurant }: Props) {
-    const tables = useQuery(api.tables.list, { restaurantId: restaurant._id, includeArchived: true })
+    const tables = useQuery(api.tables.list, {
+        restaurantId: restaurant._id,
+        includeArchived: true,
+    })
     const create = useAction(api.tables.create)
     const [name, setName] = useState("")
     const [pending, setPending] = useState(false)
     const [error, setError] = useState<string>()
-    const [created, setCreated] = useState<{ tableId: Id<"restaurantTables">; token: string }>()
+    const [created, setCreated] = useState<{
+        tableId: Id<"restaurantTables">
+        token: string
+    }>()
 
     async function submit(event: React.FormEvent) {
         event.preventDefault()
@@ -317,10 +466,17 @@ function TablesWorkspaceContent({ restaurant }: Props) {
         setPending(true)
         setError(undefined)
         try {
-            setCreated(await create({ restaurantId: restaurant._id, name: name.trim() }))
+            setCreated(
+                await create({
+                    restaurantId: restaurant._id,
+                    name: name.trim(),
+                })
+            )
             setName("")
         } catch (cause) {
-            setError(friendlyError(cause, "Unable to create this table. Try again."))
+            setError(
+                friendlyError(cause, "Unable to create this table. Try again.")
+            )
         } finally {
             setPending(false)
         }
@@ -331,37 +487,104 @@ function TablesWorkspaceContent({ restaurant }: Props) {
         <section className="mx-auto grid w-full max-w-6xl gap-6">
             <header className="flex flex-wrap items-end justify-between gap-4">
                 <div>
-                    <p className="text-sm font-medium tracking-[0.18em] text-primary uppercase">Service floor</p>
-                    <h1 className="mt-2 text-3xl font-semibold tracking-tight">Tables & ordering links</h1>
-                    <p className="mt-2 max-w-2xl text-muted-foreground">Create one private ordering link per table. Keep links hidden while a table is inactive or archived.</p>
+                    <p className="text-sm font-medium tracking-[0.18em] text-primary uppercase">
+                        Service floor
+                    </p>
+                    <h1 className="mt-2 text-3xl font-semibold tracking-tight">
+                        Tables & ordering links
+                    </h1>
+                    <p className="mt-2 max-w-2xl text-muted-foreground">
+                        Create one private ordering link per table. Keep links
+                        hidden while a table is inactive or archived.
+                    </p>
                 </div>
-                <div className="flex items-center gap-2 text-xs text-muted-foreground"><ShieldCheck className="size-4 text-primary" aria-hidden="true" /> Owner workspace</div>
+                <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                    <ShieldCheck
+                        className="size-4 text-primary"
+                        aria-hidden="true"
+                    />{" "}
+                    Owner workspace
+                </div>
             </header>
             {created && (
                 <Card className="border-primary/30 bg-primary/5">
-                    <CardHeader><CardTitle className="text-base">Table created</CardTitle><CardDescription>Keep this link handy. You can reveal it again from the table below.</CardDescription></CardHeader>
-                    <CardContent><TableLink slug={restaurant.slug} token={created.token} /></CardContent>
+                    <CardHeader>
+                        <CardTitle className="text-base">
+                            Table created
+                        </CardTitle>
+                        <CardDescription>
+                            Keep this link handy. You can reveal it again from
+                            the table below.
+                        </CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                        <TableLink
+                            slug={restaurant.slug}
+                            token={created.token}
+                        />
+                    </CardContent>
                 </Card>
             )}
             <Card>
-                <CardHeader><CardTitle>Add a table</CardTitle><CardDescription>New tables start active and ready for guest ordering.</CardDescription></CardHeader>
+                <CardHeader>
+                    <CardTitle>Add a table</CardTitle>
+                    <CardDescription>
+                        New tables start active and ready for guest ordering.
+                    </CardDescription>
+                </CardHeader>
                 <CardContent>
                     <form className="flex flex-wrap gap-2" onSubmit={submit}>
-                        <Input value={name} onChange={(event) => setName(event.target.value)} placeholder="Table name, e.g. Patio 1" aria-label="New table name" className="max-w-sm" disabled={pending} />
-                        <Button type="submit" disabled={pending}>{pending ? "Creating..." : "Create table"}</Button>
+                        <Input
+                            value={name}
+                            onChange={(event) => setName(event.target.value)}
+                            placeholder="Table name, e.g. Patio 1"
+                            aria-label="New table name"
+                            className="max-w-sm"
+                            disabled={pending}
+                        />
+                        <Button type="submit" disabled={pending}>
+                            {pending ? "Creating..." : "Create table"}
+                        </Button>
                     </form>
-                    {error && <p role="alert" className="mt-2 text-sm text-destructive">{error}</p>}
+                    {error && (
+                        <p
+                            role="alert"
+                            className="mt-2 text-sm text-destructive"
+                        >
+                            {error}
+                        </p>
+                    )}
                 </CardContent>
             </Card>
             {tables.length === 0 ? (
-                <Card className="border-dashed"><CardHeader><CardTitle>No tables yet</CardTitle><CardDescription>Create your first table above to start sharing guest ordering links.</CardDescription></CardHeader></Card>
+                <Card className="border-dashed">
+                    <CardHeader>
+                        <CardTitle>No tables yet</CardTitle>
+                        <CardDescription>
+                            Create your first table above to start sharing guest
+                            ordering links.
+                        </CardDescription>
+                    </CardHeader>
+                </Card>
             ) : (
-                <div className="grid gap-3">{tables.map((table) => <TableRow key={table._id} table={table} slug={restaurant.slug} />)}</div>
+                <div className="grid gap-3">
+                    {tables.map((table) => (
+                        <TableRow
+                            key={table._id}
+                            table={table}
+                            slug={restaurant.slug}
+                        />
+                    ))}
+                </div>
             )}
         </section>
     )
 }
 
 export function TablesWorkspace({ restaurant }: Props) {
-    return <QueryErrorBoundary><TablesWorkspaceContent restaurant={restaurant} /></QueryErrorBoundary>
+    return (
+        <QueryErrorBoundary>
+            <TablesWorkspaceContent restaurant={restaurant} />
+        </QueryErrorBoundary>
+    )
 }

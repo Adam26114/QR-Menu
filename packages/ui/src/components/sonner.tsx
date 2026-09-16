@@ -10,8 +10,18 @@ import { useTheme } from "next-themes"
  * WHERE: The root Providers component renders one instance.
  */
 function Toaster() {
-  const { theme = "system" } = useTheme()
-  return <Sonner theme={theme === "light" || theme === "dark" ? theme : "system"} className="toaster group" toastOptions={{ classNames: { toast: "group toast group-[.toaster]:bg-background group-[.toaster]:text-foreground group-[.toaster]:border-border" } }} />
+    const { theme = "system" } = useTheme()
+    return (
+        <Sonner
+            theme={theme === "light" || theme === "dark" ? theme : "system"}
+            className="toaster group"
+            toastOptions={{
+                classNames: {
+                    toast: "group toast group-[.toaster]:bg-background group-[.toaster]:text-foreground group-[.toaster]:border-border",
+                },
+            }}
+        />
+    )
 }
 
 export { Toaster, toast }

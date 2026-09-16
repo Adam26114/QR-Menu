@@ -8,9 +8,12 @@ import { v } from "convex/values"
 
 type AuthDataModel = DataModelFromSchemaDefinition<typeof authSchema>
 
-const authComponent = createClient<AuthDataModel, typeof authSchema>(components.betterAuth, {
-  local: { schema: authSchema },
-})
+const authComponent = createClient<AuthDataModel, typeof authSchema>(
+    components.betterAuth,
+    {
+        local: { schema: authSchema },
+    }
+)
 
 /**
  * SOURCE OF TRUTH KEYWORDS: current user, Better Auth client API, authenticated identity
@@ -27,10 +30,12 @@ export const { getAuthUser } = authComponent.clientApi()
  * WHERE: Admin-only UI routes use this result as their server-backed authorization seam.
  */
 export const isAdmin = query({
-  args: {},
-  returns: v.object({ authorized: v.boolean() }),
-  handler: async (ctx) => {
-    const user = await authComponent.safeGetAuthUser(ctx as GenericCtx<AuthDataModel>)
-    return { authorized: user?.role === "admin" }
-  },
+    args: {},
+    returns: v.object({ authorized: v.boolean() }),
+    handler: async (ctx) => {
+        const user = await authComponent.safeGetAuthUser(
+            ctx as GenericCtx<AuthDataModel>
+        )
+        return { authorized: user?.role === "admin" }
+    },
 })

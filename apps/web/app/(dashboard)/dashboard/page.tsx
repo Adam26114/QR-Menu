@@ -7,5 +7,5 @@ import { DashboardOverview } from "@/components/dashboard-overview"
  * WHERE: DashboardAuthBoundary in the parent layout mounts this page only after auth resolves.
  */
 export default function DashboardPage() {
-  return <DashboardOverview />
+    return <DashboardOverview />
 }

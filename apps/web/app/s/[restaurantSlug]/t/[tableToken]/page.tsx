@@ -44,10 +44,10 @@ export default function PublicTableMenuPage() {
         tableToken: string | string[]
     }>()
     const restaurantSlug = Array.isArray(params.restaurantSlug)
-        ? params.restaurantSlug[0] ?? ""
+        ? (params.restaurantSlug[0] ?? "")
         : params.restaurantSlug
     const tableToken = Array.isArray(params.tableToken)
-        ? params.tableToken[0] ?? ""
+        ? (params.tableToken[0] ?? "")
         : params.tableToken
     const menu = useQuery(api.tables.resolvePublic, {
         restaurantSlug,
@@ -57,7 +57,11 @@ export default function PublicTableMenuPage() {
     if (menu === undefined) {
         return (
             <main className="min-h-screen bg-muted/30 px-4 py-12 sm:px-6">
-                <div className="mx-auto max-w-3xl" role="status" aria-live="polite">
+                <div
+                    className="mx-auto max-w-3xl"
+                    role="status"
+                    aria-live="polite"
+                >
                     <Card>
                         <CardContent className="flex min-h-40 items-center justify-center py-10 text-sm text-muted-foreground">
                             Loading menu...
@@ -78,7 +82,8 @@ export default function PublicTableMenuPage() {
                         </CardHeader>
                         <CardContent>
                             <p className="text-sm leading-6 text-muted-foreground">
-                                This table menu is no longer available. Ask a team member for a new QR code.
+                                This table menu is no longer available. Ask a
+                                team member for a new QR code.
                             </p>
                         </CardContent>
                     </Card>
@@ -91,7 +96,7 @@ export default function PublicTableMenuPage() {
         <main className="min-h-screen bg-muted/30 px-4 py-8 sm:px-6 sm:py-12">
             <div className="mx-auto max-w-3xl space-y-8">
                 <header className="rounded-2xl bg-primary px-6 py-8 text-primary-foreground shadow-sm sm:px-10">
-                    <p className="text-sm font-medium uppercase tracking-[0.2em] opacity-80">
+                    <p className="text-sm font-medium tracking-[0.2em] uppercase opacity-80">
                         {menu.table.name}
                     </p>
                     <h1 className="mt-3 text-3xl font-semibold tracking-tight sm:text-4xl">
@@ -104,7 +109,10 @@ export default function PublicTableMenuPage() {
 
                 <div className="space-y-10">
                     {menu.categories.map((category) => (
-                        <section key={category.name} aria-labelledby={`category-${category.name}`}>
+                        <section
+                            key={category.name}
+                            aria-labelledby={`category-${category.name}`}
+                        >
                             <div className="mb-4 flex items-center gap-3">
                                 <h2
                                     id={`category-${category.name}`}
@@ -112,13 +120,19 @@ export default function PublicTableMenuPage() {
                                 >
                                     {category.name}
                                 </h2>
-                                <div className="h-px flex-1 bg-border" aria-hidden="true" />
+                                <div
+                                    className="h-px flex-1 bg-border"
+                                    aria-hidden="true"
+                                />
                             </div>
 
                             {category.items.length > 0 ? (
                                 <div className="grid gap-4">
                                     {category.items.map((item) => (
-                                        <Card key={item.name} className="overflow-hidden gap-0 py-0 sm:flex-row">
+                                        <Card
+                                            key={item.name}
+                                            className="gap-0 overflow-hidden py-0 sm:flex-row"
+                                        >
                                             {item.imageUrl ? (
                                                 <Image
                                                     src={item.imageUrl}
@@ -130,11 +144,15 @@ export default function PublicTableMenuPage() {
                                                 />
                                             ) : null}
                                             <div className="flex min-w-0 flex-1 flex-col">
-                                                <CardHeader className="pb-3 pt-5">
+                                                <CardHeader className="pt-5 pb-3">
                                                     <div className="flex items-start justify-between gap-4">
-                                                        <CardTitle className="text-lg">{item.name}</CardTitle>
+                                                        <CardTitle className="text-lg">
+                                                            {item.name}
+                                                        </CardTitle>
                                                         <span className="shrink-0 font-semibold tabular-nums">
-                                                            {formatPrice(item.priceMinor)}
+                                                            {formatPrice(
+                                                                item.priceMinor
+                                                            )}
                                                         </span>
                                                     </div>
                                                 </CardHeader>
@@ -147,29 +165,62 @@ export default function PublicTableMenuPage() {
 
                                                     {item.options.length > 0 ? (
                                                         <div className="space-y-4 border-t pt-4">
-                                                            {item.options.map((group) => (
-                                                                <div key={group.name}>
-                                                                    <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
-                                                                        <h3 className="text-sm font-medium">{group.name}</h3>
-                                                                        <p className="text-xs text-muted-foreground">
-                                                                            {formatSelection(group)}
-                                                                        </p>
+                                                            {item.options.map(
+                                                                (group) => (
+                                                                    <div
+                                                                        key={
+                                                                            group.name
+                                                                        }
+                                                                    >
+                                                                        <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+                                                                            <h3 className="text-sm font-medium">
+                                                                                {
+                                                                                    group.name
+                                                                                }
+                                                                            </h3>
+                                                                            <p className="text-xs text-muted-foreground">
+                                                                                {formatSelection(
+                                                                                    group
+                                                                                )}
+                                                                            </p>
+                                                                        </div>
+                                                                        <ul className="mt-2 grid gap-1.5 text-sm text-muted-foreground sm:grid-cols-2">
+                                                                            {group.choices.map(
+                                                                                (
+                                                                                    choice
+                                                                                ) => (
+                                                                                    <li
+                                                                                        key={
+                                                                                            choice.name
+                                                                                        }
+                                                                                        className="flex justify-between gap-3"
+                                                                                    >
+                                                                                        <span>
+                                                                                            {
+                                                                                                choice.name
+                                                                                            }
+                                                                                        </span>
+                                                                                        {choice.priceDeltaMinor !==
+                                                                                        0 ? (
+                                                                                            <span className="shrink-0 tabular-nums">
+                                                                                                {choice.priceDeltaMinor >
+                                                                                                0
+                                                                                                    ? "+"
+                                                                                                    : "-"}
+                                                                                                {formatPrice(
+                                                                                                    Math.abs(
+                                                                                                        choice.priceDeltaMinor
+                                                                                                    )
+                                                                                                )}
+                                                                                            </span>
+                                                                                        ) : null}
+                                                                                    </li>
+                                                                                )
+                                                                            )}
+                                                                        </ul>
                                                                     </div>
-                                                                    <ul className="mt-2 grid gap-1.5 text-sm text-muted-foreground sm:grid-cols-2">
-                                                                        {group.choices.map((choice) => (
-                                                                            <li key={choice.name} className="flex justify-between gap-3">
-                                                                                <span>{choice.name}</span>
-                                                                                {choice.priceDeltaMinor !== 0 ? (
-                                                                                    <span className="shrink-0 tabular-nums">
-                                                                                        {choice.priceDeltaMinor > 0 ? "+" : "-"}
-                                                                                        {formatPrice(Math.abs(choice.priceDeltaMinor))}
-                                                                                    </span>
-                                                                                ) : null}
-                                                                            </li>
-                                                                        ))}
-                                                                    </ul>
-                                                                </div>
-                                                            ))}
+                                                                )
+                                                            )}
                                                         </div>
                                                     ) : null}
                                                 </CardContent>
@@ -178,7 +229,9 @@ export default function PublicTableMenuPage() {
                                     ))}
                                 </div>
                             ) : (
-                                <p className="text-sm text-muted-foreground">No items available in this category.</p>
+                                <p className="text-sm text-muted-foreground">
+                                    No items available in this category.
+                                </p>
                             )}
                         </section>
                     ))}

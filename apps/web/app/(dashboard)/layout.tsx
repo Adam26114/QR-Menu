@@ -8,11 +8,11 @@ import { ConvexClientProvider } from "@/components/ConvexClientProvider"
  * WHERE: Every route in the dashboard route group is protected by this layout.
  */
 export default function DashboardLayout({
-  children,
+    children,
 }: Readonly<{ children: React.ReactNode }>) {
-  return (
-    <ConvexClientProvider>
-      <DashboardAuthBoundary>{children}</DashboardAuthBoundary>
-    </ConvexClientProvider>
-  )
+    return (
+        <ConvexClientProvider>
+            <DashboardAuthBoundary>{children}</DashboardAuthBoundary>
+        </ConvexClientProvider>
+    )
 }

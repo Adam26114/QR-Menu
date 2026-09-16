@@ -10,5 +10,5 @@ import { convexClient } from "@convex-dev/better-auth/client/plugins"
  * WHERE: ConvexBetterAuthProvider and auth forms consume this client.
  */
 export const authClient = createAuthClient({
-  plugins: [convexClient()],
+    plugins: [convexClient()],
 })

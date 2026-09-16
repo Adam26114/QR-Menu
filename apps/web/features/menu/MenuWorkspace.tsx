@@ -319,7 +319,10 @@ function ItemEditor({
                         )}
                     </div>
                     {imageStatus && (
-                        <p className="text-sm text-muted-foreground" role="status">
+                        <p
+                            className="text-sm text-muted-foreground"
+                            role="status"
+                        >
                             {imageStatus}
                         </p>
                     )}

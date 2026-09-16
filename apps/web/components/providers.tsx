@@ -11,5 +11,10 @@ import { Toaster } from "@workspace/ui/components/sonner"
  * WHERE: app/layout.tsx wraps all routes with this component.
  */
 export function Providers({ children }: { children: React.ReactNode }) {
-  return <Provider store={store}>{children}<Toaster /></Provider>
+    return (
+        <Provider store={store}>
+            {children}
+            <Toaster />
+        </Provider>
+    )
 }

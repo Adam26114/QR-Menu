@@ -6,13 +6,13 @@ import { Skeleton } from "@workspace/ui/components/skeleton"
  * WHERE: Next.js renders this while dashboard segments load.
  */
 export default function Loading() {
-  return (
-    <div>
-      <div className="mx-auto grid max-w-3xl gap-4">
-        <Skeleton className="h-12 w-48" />
-        <Skeleton className="h-28" />
-        <Skeleton className="h-24" />
-      </div>
-    </div>
-  )
+    return (
+        <div>
+            <div className="mx-auto grid max-w-3xl gap-4">
+                <Skeleton className="h-12 w-48" />
+                <Skeleton className="h-28" />
+                <Skeleton className="h-24" />
+            </div>
+        </div>
+    )
 }

@@ -5,8 +5,14 @@ import { createSlice, type PayloadAction } from "@reduxjs/toolkit"
  * WHY: Server-owned project data stays in Convex queries.
  * WHERE: Project screens can use this for modal visibility.
  */
-const uiSlice = createSlice({ name: "ui", initialState: { projectFormOpen: true }, reducers: {
-  setProjectFormOpen: (state, action: PayloadAction<boolean>) => { state.projectFormOpen = action.payload },
-} })
+const uiSlice = createSlice({
+    name: "ui",
+    initialState: { projectFormOpen: true },
+    reducers: {
+        setProjectFormOpen: (state, action: PayloadAction<boolean>) => {
+            state.projectFormOpen = action.payload
+        },
+    },
+})
 export const { setProjectFormOpen } = uiSlice.actions
 export default uiSlice.reducer

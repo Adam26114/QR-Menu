@@ -22,7 +22,7 @@ But don't create blindly. You have to know whether something that already facili
 
 The whole codebase carries a `SOURCE OF TRUTH KEYWORDS` line at the top of each file and code block precisely so you can find things without reading everything. This is what keeps context pollution at zero and stops us from burning through session limits.
 
-Before creating any type, function, constant, or component, grep for it by keyword – and you must grep with `-l`. That gives you the list of *files* where the thing could live; you then narrow to where it's most likely to be and read only those files. It's the fastest path that also protects the context window. If the keyword search turns up nothing, search the codebase normally. If you find it, follow what's already there.
+Before creating any type, function, constant, or component, grep for it by keyword – and you must grep with `-l`. That gives you the list of _files_ where the thing could live; you then narrow to where it's most likely to be and read only those files. It's the fastest path that also protects the context window. If the keyword search turns up nothing, search the codebase normally. If you find it, follow what's already there.
 
 If you do have to create something new, give it its own `SOURCE OF TRUTH KEYWORDS` line with 5–6 specific keywords so the next agent can find it and understand how it works.
 
@@ -43,6 +43,7 @@ Never create a duplicate type, function, component, or block of code because gre
 Never use `any`, `unknown`, hardcoded types, or any other TypeScript bypass – this is a production application.
 
 For types, work in this order so we save context:
+
 1. If the type is a database document or its ID, it already exists — use Convex's generated `Doc<"tableName">` / `Id<"tableName">` from `convex/_generated/dataModel`. Never hand-write an interface that duplicates a table already defined in `convex/schema.ts`.
 2. If the type is a Convex function's arguments or return value, it's inferred automatically end-to-end between the function definition and `useQuery` / `useMutation` on the client — don't redeclare it. If a validator genuinely needs to be reused as a standalone type, derive it with `Infer<typeof myValidator>` instead of writing the shape twice.
 3. Otherwise, check `lib/types` to see whether the custom type already exists, and only create one if it doesn't and it will genuinely be a reusable source of truth.

@@ -8,4 +8,6 @@ import { projectsApi } from "../api/projects"
  * WHY: Update state can be keyed by project ID without blocking other rows.
  * WHERE: ProjectsView uses this hook for edit forms.
  */
-export function useUpdateProject() { return useMutation(projectsApi.update) }
+export function useUpdateProject() {
+    return useMutation(projectsApi.update)
+}

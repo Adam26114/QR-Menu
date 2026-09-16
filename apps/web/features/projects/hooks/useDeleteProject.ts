@@ -8,4 +8,6 @@ import { projectsApi } from "../api/projects"
  * WHY: Delete confirmation and pending state stay scoped to one row.
  * WHERE: ProjectsView uses this hook for confirmed deletions.
  */
-export function useDeleteProject() { return useMutation(projectsApi.remove) }
+export function useDeleteProject() {
+    return useMutation(projectsApi.remove)
+}

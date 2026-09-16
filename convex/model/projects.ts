@@ -15,19 +15,19 @@ const PROJECT_DESCRIPTION_MAX_LENGTH = 500
  * WHERE: Project creation and updates use this validation boundary.
  */
 function normalizeProjectName(name: string): string {
-  const normalizedName = name.trim()
-  if (!normalizedName)
-    throw expectedError(
-      ERROR_CODES.VALIDATION_FAILED,
-      "Project name is required"
-    )
-  if (normalizedName.length > PROJECT_NAME_MAX_LENGTH) {
-    throw expectedError(
-      ERROR_CODES.VALIDATION_FAILED,
-      `Project name must be ${PROJECT_NAME_MAX_LENGTH} characters or fewer`
-    )
-  }
-  return normalizedName
+    const normalizedName = name.trim()
+    if (!normalizedName)
+        throw expectedError(
+            ERROR_CODES.VALIDATION_FAILED,
+            "Project name is required"
+        )
+    if (normalizedName.length > PROJECT_NAME_MAX_LENGTH) {
+        throw expectedError(
+            ERROR_CODES.VALIDATION_FAILED,
+            `Project name must be ${PROJECT_NAME_MAX_LENGTH} characters or fewer`
+        )
+    }
+    return normalizedName
 }
 
 /**
@@ -37,82 +37,86 @@ function normalizeProjectName(name: string): string {
  * WHERE: convex/projects.ts delegates every project operation here.
  */
 export function listProjects(
-  ctx: QueryCtx,
-  tokenIdentifier: string,
-  paginationOpts: PaginationOptions
+    ctx: QueryCtx,
+    tokenIdentifier: string,
+    paginationOpts: PaginationOptions
 ) {
-  // Legacy ownerId-only documents are intentionally not exposed; PRD retires the starter Projects surface without migration.
-  return ctx.db
-    .query("projects")
-    .withIndex("by_token_identifier_updated", (q) =>
-      q.eq("tokenIdentifier", tokenIdentifier)
-    )
-    .order("desc")
-    .paginate(paginationOpts)
+    // Legacy ownerId-only documents are intentionally not exposed; PRD retires the starter Projects surface without migration.
+    return ctx.db
+        .query("projects")
+        .withIndex("by_token_identifier_updated", (q) =>
+            q.eq("tokenIdentifier", tokenIdentifier)
+        )
+        .order("desc")
+        .paginate(paginationOpts)
 }
 
 export async function createProject(
-  ctx: MutationCtx,
-  tokenIdentifier: string,
-  name: string,
-  description?: string
+    ctx: MutationCtx,
+    tokenIdentifier: string,
+    name: string,
+    description?: string
 ): Promise<Id<"projects">> {
-  const now = Date.now()
-  return await ctx.db.insert("projects", {
-    tokenIdentifier,
-    name: normalizeProjectName(name),
-    description: normalizeDescription(description),
-    createdAt: now,
-    updatedAt: now,
-  })
+    const now = Date.now()
+    return await ctx.db.insert("projects", {
+        tokenIdentifier,
+        name: normalizeProjectName(name),
+        description: normalizeDescription(description),
+        createdAt: now,
+        updatedAt: now,
+    })
 }
 
 export async function updateProject(
-  ctx: MutationCtx,
-  tokenIdentifier: string,
-  projectId: Id<"projects">,
-  name: string,
-  description?: string
+    ctx: MutationCtx,
+    tokenIdentifier: string,
+    projectId: Id<"projects">,
+    name: string,
+    description?: string
 ): Promise<void> {
-  const project = await getOwnedProject(ctx, tokenIdentifier, projectId)
-  await ctx.db.patch("projects", project._id, {
-    name: normalizeProjectName(name),
-    description: normalizeDescription(description),
-    updatedAt: Date.now(),
-  })
+    const project = await getOwnedProject(ctx, tokenIdentifier, projectId)
+    await ctx.db.patch("projects", project._id, {
+        name: normalizeProjectName(name),
+        description: normalizeDescription(description),
+        updatedAt: Date.now(),
+    })
 }
 
 export async function deleteProject(
-  ctx: MutationCtx,
-  tokenIdentifier: string,
-  projectId: Id<"projects">
+    ctx: MutationCtx,
+    tokenIdentifier: string,
+    projectId: Id<"projects">
 ): Promise<void> {
-  const project = await getOwnedProject(ctx, tokenIdentifier, projectId)
-  await ctx.db.delete("projects", project._id)
+    const project = await getOwnedProject(ctx, tokenIdentifier, projectId)
+    await ctx.db.delete("projects", project._id)
 }
 
 function normalizeDescription(description?: string): string | undefined {
-  const normalizedDescription = description?.trim()
-  if (
-    normalizedDescription &&
-    normalizedDescription.length > PROJECT_DESCRIPTION_MAX_LENGTH
-  ) {
-    throw expectedError(
-      ERROR_CODES.VALIDATION_FAILED,
-      `Description must be ${PROJECT_DESCRIPTION_MAX_LENGTH} characters or fewer`
-    )
-  }
-  return normalizedDescription || undefined
+    const normalizedDescription = description?.trim()
+    if (
+        normalizedDescription &&
+        normalizedDescription.length > PROJECT_DESCRIPTION_MAX_LENGTH
+    ) {
+        throw expectedError(
+            ERROR_CODES.VALIDATION_FAILED,
+            `Description must be ${PROJECT_DESCRIPTION_MAX_LENGTH} characters or fewer`
+        )
+    }
+    return normalizedDescription || undefined
 }
 
 async function getOwnedProject(
-  ctx: ProjectContext,
-  tokenIdentifier: string,
-  projectId: Id<"projects">
+    ctx: ProjectContext,
+    tokenIdentifier: string,
+    projectId: Id<"projects">
 ): Promise<Doc<"projects">> {
-  const project = await ctx.db.get("projects", projectId)
-  if (!project) throw expectedError(ERROR_CODES.NOT_FOUND, "Project not found")
-  if (project.tokenIdentifier !== tokenIdentifier)
-    throw expectedError(ERROR_CODES.FORBIDDEN, "You cannot access this project")
-  return project
+    const project = await ctx.db.get("projects", projectId)
+    if (!project)
+        throw expectedError(ERROR_CODES.NOT_FOUND, "Project not found")
+    if (project.tokenIdentifier !== tokenIdentifier)
+        throw expectedError(
+            ERROR_CODES.FORBIDDEN,
+            "You cannot access this project"
+        )
+    return project
 }

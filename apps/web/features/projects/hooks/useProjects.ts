@@ -10,5 +10,5 @@ import { projectsApi } from "../api/projects"
  * WHERE: ProjectsView renders pages and requests more records.
  */
 export function useProjects() {
-  return usePaginatedQuery(projectsApi.list, {}, { initialNumItems: 10 })
+    return usePaginatedQuery(projectsApi.list, {}, { initialNumItems: 10 })
 }

@@ -12,13 +12,18 @@ import { convexBetterAuthNextJs } from "@convex-dev/better-auth/nextjs"
  * WHY: Auth requests cannot be configured safely without both endpoints.
  * WHERE: The Next.js Better Auth server bridge uses this helper at module initialization.
  */
-function requiredEnv(name: "NEXT_PUBLIC_CONVEX_URL" | "NEXT_PUBLIC_CONVEX_SITE_URL"): string {
-  const value = process.env[name]?.trim()
-  if (!value) throw new Error(`${name} is required to initialize the Better Auth server bridge`)
-  return value
+function requiredEnv(
+    name: "NEXT_PUBLIC_CONVEX_URL" | "NEXT_PUBLIC_CONVEX_SITE_URL"
+): string {
+    const value = process.env[name]?.trim()
+    if (!value)
+        throw new Error(
+            `${name} is required to initialize the Better Auth server bridge`
+        )
+    return value
 }
 
 export const authServer = convexBetterAuthNextJs({
-  convexUrl: requiredEnv("NEXT_PUBLIC_CONVEX_URL"),
-  convexSiteUrl: requiredEnv("NEXT_PUBLIC_CONVEX_SITE_URL"),
+    convexUrl: requiredEnv("NEXT_PUBLIC_CONVEX_URL"),
+    convexSiteUrl: requiredEnv("NEXT_PUBLIC_CONVEX_SITE_URL"),
 })

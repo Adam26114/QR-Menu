@@ -8,9 +8,9 @@ import { ProjectsView } from "@/features/projects"
  * WHERE: DashboardAuthBoundary in the parent layout mounts this page only after auth resolves.
  */
 export default function ProjectsPage() {
-  return (
-    <FeatureErrorBoundary>
-      <ProjectsView />
-    </FeatureErrorBoundary>
-  )
+    return (
+        <FeatureErrorBoundary>
+            <ProjectsView />
+        </FeatureErrorBoundary>
+    )
 }

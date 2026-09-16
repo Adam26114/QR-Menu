@@ -1,7 +1,7 @@
 import { ConvexClientProvider } from "@/components/ConvexClientProvider"
 
 export default function AuthLayout({
-  children,
+    children,
 }: Readonly<{ children: React.ReactNode }>) {
-  return <ConvexClientProvider>{children}</ConvexClientProvider>
+    return <ConvexClientProvider>{children}</ConvexClientProvider>
 }

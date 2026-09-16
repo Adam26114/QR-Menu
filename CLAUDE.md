@@ -11,3 +11,17 @@ Convex agent skills for common tasks can be installed by running
 `bunx convex ai-files install`.
 
 <!-- convex-ai-end -->
+
+## Agent skills
+
+### Issue tracker
+
+Issues and specs live in GitHub Issues and use the `gh` CLI. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+Use the canonical default triage labels: `needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, and `wontfix`. See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+This is a single-context repo using root `CONTEXT.md` and `docs/adr/`. See `docs/agents/domain.md`.

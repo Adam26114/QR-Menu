@@ -3,11 +3,11 @@ import schema from "./schema"
 import { createAuthOptions } from "../betterAuthOptions"
 
 export const {
-  create,
-  findOne,
-  findMany,
-  updateOne,
-  updateMany,
-  deleteOne,
-  deleteMany,
+    create,
+    findOne,
+    findMany,
+    updateOne,
+    updateMany,
+    deleteOne,
+    deleteMany,
 } = createApi(schema, createAuthOptions)
