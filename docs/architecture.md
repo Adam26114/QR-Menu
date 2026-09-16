@@ -2,11 +2,11 @@
 
 ## Default data flow
 
-Convex is the default backend and data source for this starterkit. The schema is the source of truth, protected wrappers enforce identity, thin public functions expose the generated API, and model files contain direct database logic:
+Convex is the default backend and data source for the restaurant operations platform. The schema is the source of truth, protected wrappers enforce identity, domain functions expose the generated Convex `api`, and model files contain direct database logic:
 
 `convex/schema.ts` -> `convex/lib/customFunctions.ts` -> `convex/*.ts` -> `convex/model/*.ts` -> generated `api`
 
-Top-level project functions are protected client APIs. The `public/*` namespace is intentionally unauthenticated only, `system/*` is internal-only, and `model/*` contains plain logic and is not a security boundary. `ownerId` currently represents personal ownership, not tenancy; organizations, memberships, and roles require a separate schema migration.
+Top-level restaurant domain functions are protected client APIs exposed through Convex's generated `api`. The `public/*` namespace is intentionally unauthenticated only, `system/*` is internal-only, and `model/*` contains plain logic and is not a security boundary. Restaurant access is tenant-scoped through active memberships, with role-based admin controls enforcing authorization for restaurant operations.
 
 Expected failures use structured `ConvexError` codes (`AUTH_REQUIRED`, `FORBIDDEN`, `NOT_FOUND`, `VALIDATION_FAILED`, and `CONFLICT`). The client maps these to safe messages and never renders arbitrary server exception text.
 
@@ -39,14 +39,11 @@ The `next-themes` provider remains responsible for the theme anti-flash script. 
 
 ## Feature structure
 
-The projects example demonstrates the reusable pattern:
+Restaurant features demonstrate the reusable pattern:
 
-- `features/projects/api` owns generated API references.
-- `features/projects/hooks` owns Convex data hooks.
-- `features/projects/components` owns forms and item presentation.
-- `features/projects/schemas.ts` owns shared Zod input validation.
+- Feature directories own generated API references, hooks, components, and input schemas for their domain.
 - Route pages compose the feature entrypoint and contain no business logic.
-- The projects list uses the indexed `by_owner_updated` query with bounded cursor pages of 10 records. `usePaginatedQuery` reports first-page, load-more, exhausted, and error states; Convex remains the source of truth.
+- Convex remains the source of truth for server data and query results.
 
 ## HTTP and tables
 

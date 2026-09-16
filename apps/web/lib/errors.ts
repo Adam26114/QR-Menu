@@ -10,11 +10,11 @@ export function getSafeErrorMessage(error: Error, fallback: string): string {
     if (message.includes("FORBIDDEN"))
         return "You do not have permission for that action."
     if (message.includes("NOT_FOUND"))
-        return "That project is no longer available."
+        return "That record is no longer available."
     if (message.includes("VALIDATION_FAILED"))
-        return "Please check the project details and try again."
+        return "Please check the details and try again."
     if (message.includes("CONFLICT"))
-        return "That change conflicts with an existing project."
+        return "That change conflicts with existing data."
     return fallback
 }
 

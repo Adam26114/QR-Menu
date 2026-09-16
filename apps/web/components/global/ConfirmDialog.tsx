@@ -27,7 +27,7 @@ type ConfirmDialogProps = {
  * SOURCE OF TRUTH KEYWORDS: ConfirmDialog, AlertDialog, destructive action, async confirmation
  * WHAT: Provides a controlled, reusable confirmation wrapper for destructive operations.
  * WHY: Confirmation closes only after the caller's action succeeds and prevents duplicate submissions.
- * WHERE: ProjectCard uses this wrapper before invoking the typed Convex delete callback.
+ * WHERE: Restaurant admin and order workflows use this wrapper before invoking typed Convex callbacks.
  */
 export function ConfirmDialog({
     open,

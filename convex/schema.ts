@@ -2,10 +2,10 @@ import { defineSchema, defineTable } from "convex/server"
 import { v } from "convex/values"
 
 /**
- * SOURCE OF TRUTH KEYWORDS: Convex schema, projects table, owner index, workspace, data model
+ * SOURCE OF TRUTH KEYWORDS: Convex schema, restaurants, admins, staff, menus, QR tables, orders
  * WHAT: Defines application-owned persistence and indexes.
  * WHY: Convex schema is the sole source for generated document and ID types.
- * WHERE: Project model and public functions consume the generated shape.
+ * WHERE: Restaurant administration, menu management, and order workflows consume the generated shape.
  */
 export default defineSchema({
     authBootstrap: defineTable({
@@ -23,6 +23,7 @@ export default defineSchema({
             )
         ),
     }).index("by_key", ["key"]),
+    // Deprecated starter table. Keep it and its indexes to avoid destructive data migration.
     projects: defineTable({
         tokenIdentifier: v.optional(v.string()),
         ownerId: v.optional(v.string()),

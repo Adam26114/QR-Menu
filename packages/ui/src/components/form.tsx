@@ -27,7 +27,7 @@ const FormFieldContext = React.createContext<FormFieldContextValue | null>(null)
  * SOURCE OF TRUTH KEYWORDS: shadcn form, React Hook Form, FormField, validation message
  * WHAT: Connects field labels, controls, descriptions, and messages to RHF state.
  * WHY: Zod errors must be announced consistently and associated with their controls.
- * WHERE: ProjectForm and sign-in compose these primitives for every field.
+ * WHERE: Restaurant and admin forms and sign-in compose these primitives for every field.
  */
 function FormField<
     TFieldValues extends FieldValues,

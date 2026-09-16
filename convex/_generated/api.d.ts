@@ -8,6 +8,7 @@
  * @module
  */
 
+import type * as admin from "../admin.js";
 import type * as auth from "../auth.js";
 import type * as authBootstrap from "../authBootstrap.js";
 import type * as authBootstrapPolicy from "../authBootstrapPolicy.js";
@@ -20,17 +21,16 @@ import type * as lib_customFunctions from "../lib/customFunctions.js";
 import type * as lib_errors from "../lib/errors.js";
 import type * as memberships from "../memberships.js";
 import type * as menu from "../menu.js";
+import type * as model_admin from "../model/admin.js";
 import type * as model_identity from "../model/identity.js";
 import type * as model_invitations from "../model/invitations.js";
 import type * as model_menu from "../model/menu.js";
 import type * as model_orders from "../model/orders.js";
-import type * as model_projects from "../model/projects.js";
 import type * as model_reports from "../model/reports.js";
 import type * as model_restaurants from "../model/restaurants.js";
 import type * as model_subscriptions from "../model/subscriptions.js";
 import type * as model_tables from "../model/tables.js";
 import type * as orders from "../orders.js";
-import type * as projects from "../projects.js";
 import type * as reports from "../reports.js";
 import type * as restaurants from "../restaurants.js";
 import type * as subscriptions from "../subscriptions.js";
@@ -43,6 +43,7 @@ import type {
 } from "convex/server";
 
 declare const fullApi: ApiFromModules<{
+  admin: typeof admin;
   auth: typeof auth;
   authBootstrap: typeof authBootstrap;
   authBootstrapPolicy: typeof authBootstrapPolicy;
@@ -55,17 +56,16 @@ declare const fullApi: ApiFromModules<{
   "lib/errors": typeof lib_errors;
   memberships: typeof memberships;
   menu: typeof menu;
+  "model/admin": typeof model_admin;
   "model/identity": typeof model_identity;
   "model/invitations": typeof model_invitations;
   "model/menu": typeof model_menu;
   "model/orders": typeof model_orders;
-  "model/projects": typeof model_projects;
   "model/reports": typeof model_reports;
   "model/restaurants": typeof model_restaurants;
   "model/subscriptions": typeof model_subscriptions;
   "model/tables": typeof model_tables;
   orders: typeof orders;
-  projects: typeof projects;
   reports: typeof reports;
   restaurants: typeof restaurants;
   subscriptions: typeof subscriptions;

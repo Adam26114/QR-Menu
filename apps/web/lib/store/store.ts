@@ -4,7 +4,6 @@ import cartReducer, {
     persistCart,
     restoreCart,
 } from "./slices/cart.slice"
-import uiReducer from "./slices/ui.slice"
 
 /**
  * SOURCE OF TRUTH KEYWORDS: Redux store, UI state, configureStore, typed state
@@ -13,7 +12,7 @@ import uiReducer from "./slices/ui.slice"
  * WHERE: Providers supplies this store to the Next app.
  */
 export const store = configureStore({
-    reducer: { ui: uiReducer, cart: cartReducer },
+    reducer: { cart: cartReducer },
     middleware: (getDefaultMiddleware) =>
         getDefaultMiddleware().concat(((api) => (next) => (action) => {
             const result = next(action)

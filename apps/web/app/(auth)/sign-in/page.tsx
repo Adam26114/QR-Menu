@@ -27,7 +27,7 @@ type SignInValues = z.infer<typeof signInSchema>
 
 /** SOURCE OF TRUTH KEYWORDS: sign in form, Better Auth email password, Zod validation
  * WHAT: Provides a small email/password sign-in form.
- * WHY: The generic example needs a safe entry point for authenticated project data.
+ * WHY: The app needs a safe entry point for authenticated restaurant data.
  * WHERE: Users can open /sign-in before visiting the dashboard.
  */
 function SignInForm() {

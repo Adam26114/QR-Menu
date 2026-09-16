@@ -103,7 +103,7 @@ export function DashboardShell({
                         <SidebarGroupLabel>
                             {isScoped
                                 ? (restaurant?.name ?? "Restaurant")
-                                : "Workspace"}
+                                : "Restaurants"}
                         </SidebarGroupLabel>
                         <DashboardNavigation
                             pathname={pathname}
@@ -140,7 +140,7 @@ export function DashboardShell({
                                 : "Owner workspace"
                             : role === "admin"
                               ? "Admin workspace"
-                              : "Workspace"}
+                               : "Restaurant operations"}
                     </div>
                 </header>
                 <div className={cn("flex-1 p-4 md:p-6")}>{children}</div>

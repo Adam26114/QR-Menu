@@ -12,7 +12,7 @@ const AlertDialogPortal = AlertDialogPrimitive.Portal
  * SOURCE OF TRUTH KEYWORDS: shadcn alert dialog, destructive confirmation, modal overlay
  * WHAT: Exposes themed AlertDialog primitives backed by Base UI.
  * WHY: Destructive actions need a reusable, accessible confirmation surface.
- * WHERE: ConfirmDialog composes these primitives for project deletion.
+ * WHERE: Admin controls compose these primitives for destructive restaurant operations.
  */
 function AlertDialogOverlay({
     className,

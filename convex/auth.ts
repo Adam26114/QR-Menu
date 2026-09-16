@@ -5,6 +5,7 @@ import { query } from "./_generated/server"
 import authSchema from "./betterAuth/schema"
 import type { DataModelFromSchemaDefinition } from "convex/server"
 import { v } from "convex/values"
+import { expectedError, ERROR_CODES } from "./lib/errors"
 
 type AuthDataModel = DataModelFromSchemaDefinition<typeof authSchema>
 
@@ -23,6 +24,24 @@ const authComponent = createClient<AuthDataModel, typeof authSchema>(
  */
 export const { getAuthUser } = authComponent.clientApi()
 
+export function assertPlatformAdminRole(role: unknown) {
+    if (role !== "admin")
+        throw expectedError(ERROR_CODES.FORBIDDEN, "Platform admin required")
+}
+
+export async function requirePlatformAdmin(ctx: unknown) {
+    const user = await authComponent.safeGetAuthUser(
+        ctx as GenericCtx<AuthDataModel>
+    )
+    if (!user)
+        throw expectedError(
+            ERROR_CODES.AUTH_REQUIRED,
+            "Authentication required"
+        )
+    assertPlatformAdminRole(user.role)
+    return user
+}
+
 /**
  * SOURCE OF TRUTH KEYWORDS: admin authorization, persisted Better Auth role
  * WHAT: Derives the current Better Auth user from the authenticated Convex context and checks its stored role.
@@ -33,9 +52,13 @@ export const isAdmin = query({
     args: {},
     returns: v.object({ authorized: v.boolean() }),
     handler: async (ctx) => {
-        const user = await authComponent.safeGetAuthUser(
-            ctx as GenericCtx<AuthDataModel>
-        )
-        return { authorized: user?.role === "admin" }
+        const user = await authComponent.safeGetAuthUser(ctx as GenericCtx<AuthDataModel>)
+        if (!user) return { authorized: false }
+        try {
+            assertPlatformAdminRole(user.role)
+            return { authorized: true }
+        } catch {
+            return { authorized: false }
+        }
     },
 })
