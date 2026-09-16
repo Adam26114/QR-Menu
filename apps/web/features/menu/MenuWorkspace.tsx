@@ -14,18 +14,10 @@ import {
 } from "@workspace/ui/components/card"
 import { Input } from "@workspace/ui/components/input"
 import { Textarea } from "@workspace/ui/components/textarea"
+import { formatMinorCurrency } from "@workspace/ui/lib/format-currency"
 import { ConfirmDialog } from "@/components/global/ConfirmDialog"
 
 type Props = { restaurant: Doc<"restaurants"> }
-
-function formatMmk(minor: number) {
-    const safe = Number.isFinite(minor) ? Math.max(0, minor) : 0
-    return new Intl.NumberFormat("en-MM", {
-        style: "currency",
-        currency: "MMK",
-        maximumFractionDigits: 0,
-    }).format(safe / 100)
-}
 
 function friendlyError(error: unknown, fallback: string) {
     const message = error instanceof Error ? error.message.toLowerCase() : ""
@@ -805,7 +797,7 @@ function MenuItemCard({
             </div>
             <div>
                 <span className="font-medium">
-                    {item.name} - {formatMmk(item.priceMinor)}
+                    {item.name} - {formatMinorCurrency(item.priceMinor)}
                 </span>
                 {item.description && (
                     <p className="text-sm text-muted-foreground">{item.description}</p>
@@ -964,13 +956,13 @@ function MenuWorkspaceContent({ restaurant }: Props) {
         )
     }
     return (
-        <section className="mx-auto grid max-w-6xl gap-6">
+        <section className="mx-auto grid min-w-0 max-w-6xl gap-6 overflow-x-hidden break-words font-sans">
             <header className="flex flex-wrap items-center justify-between gap-3">
-                <div>
+                <div className="min-w-0">
                     <p className="text-xs font-semibold uppercase tracking-[0.18em] text-primary">Catalog</p>
                     <h1 className="text-2xl font-semibold tracking-tight">Menu</h1>
                 </div>
-                <div className="flex gap-2">
+                 <div className="flex min-w-0 flex-wrap gap-2">
                      <Button
                          type="button"
                          onClick={() => {
@@ -1217,8 +1209,8 @@ function MenuWorkspaceContent({ restaurant }: Props) {
                                             <div className="mb-3 aspect-[4/3] overflow-hidden rounded-lg bg-muted">
                                                 {item.imageUrl ? <img src={item.imageUrl} alt="" className="size-full object-cover" /> : <div className="grid size-full place-items-center text-sm text-muted-foreground">No image</div>}
                                             </div>
-                                            <span className="font-medium">
-                                                {item.name} - {formatMmk(item.priceMinor)}
+                                             <span className="font-medium tabular-nums">
+                                                {item.name} - {formatMinorCurrency(item.priceMinor)}
                                             </span>
                                             {item.description && (
                                                 <p className="text-sm text-muted-foreground">

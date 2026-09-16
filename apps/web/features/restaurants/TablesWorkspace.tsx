@@ -5,7 +5,6 @@ import {
     Component,
     type ReactNode,
     useCallback,
-    useEffect,
     useRef,
     useState,
 } from "react"
@@ -34,6 +33,12 @@ import {
 } from "@workspace/ui/components/card"
 import { Input } from "@workspace/ui/components/input"
 import { ConfirmDialog } from "@/components/global/ConfirmDialog"
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogTitle,
+} from "@workspace/ui/components/dialog"
 
 type Props = { restaurant: Doc<"restaurants"> }
 type Table = Pick<
@@ -250,15 +255,6 @@ function TableRow({ table, slug }: { table: Table; slug: string }) {
         setToken(undefined)
     }, [])
 
-    useEffect(() => {
-        if (!qrOpen) return
-        function handleKeyDown(event: KeyboardEvent) {
-            if (event.key === "Escape") closeQr()
-        }
-        window.addEventListener("keydown", handleKeyDown)
-        return () => window.removeEventListener("keydown", handleKeyDown)
-    }, [closeQr, qrOpen])
-
     async function run(action: () => Promise<unknown>) {
         if (pending) return false
         setPending(true)
@@ -442,24 +438,18 @@ function TableRow({ table, slug }: { table: Table; slug: string }) {
                     )}
                 </div>
             )}
-            {qrOpen && token && (
-                 <div
-                     role="dialog"
-                     aria-modal="true"
-                     aria-labelledby={`qr-dialog-title-${table._id}`}
-                     className="fixed inset-0 z-50 grid place-items-center bg-black/50 p-4"
-                 >
-                     <div className="max-h-[90vh] w-full max-w-lg overflow-auto rounded-xl bg-background p-4">
-                         <div className="mb-3 flex items-center justify-between">
-                             <h2 id={`qr-dialog-title-${table._id}`} className="font-semibold">{table.name} ordering QR</h2>
-                            <Button type="button" variant="ghost" onClick={closeQr}>
-                                Close
-                            </Button>
-                        </div>
-                        <TableLink slug={slug} token={token} />
-                    </div>
-                </div>
-            )}
+             <Dialog open={qrOpen && Boolean(token)} onOpenChange={(open) => !open && closeQr()}>
+                 <DialogContent>
+                     <div className="flex min-w-0 items-center justify-between gap-3">
+                         <div>
+                             <DialogTitle>{table.name} ordering QR</DialogTitle>
+                             <DialogDescription>Share this private ordering link with guests.</DialogDescription>
+                         </div>
+                         <Button type="button" variant="ghost" onClick={closeQr}>Close</Button>
+                     </div>
+                     {token && <TableLink slug={slug} token={token} />}
+                 </DialogContent>
+             </Dialog>
             <ConfirmDialog
                 open={confirmArchive}
                 onOpenChange={setConfirmArchive}
@@ -535,9 +525,9 @@ function TablesWorkspaceContent({ restaurant }: Props) {
     const areas = ["All", ...Array.from(new Set(tables.map((table) => table.area)))]
     const visibleTables = tables.filter((table) => (areaFilter === "All" || table.area === areaFilter) && (statusFilter === "all" || table.serviceStatus === statusFilter))
     return (
-        <section className="mx-auto grid w-full max-w-6xl gap-6">
+        <section className="mx-auto grid min-w-0 w-full max-w-6xl gap-6 overflow-x-hidden break-words font-sans">
             <header className="flex flex-wrap items-end justify-between gap-4">
-                <div>
+                <div className="min-w-0">
                     <p className="text-sm font-medium tracking-[0.18em] text-primary uppercase">
                         Service floor
                     </p>
