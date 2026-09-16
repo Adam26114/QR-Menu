@@ -124,7 +124,7 @@ export async function submit(ctx: MutationCtx, args: { restaurantSlug: string; t
     const trackingToken = await createToken()
     const encrypted = await encryptOpaqueToken(trackingToken)
     const orderId = await ctx.db.insert("orders", { restaurantId: restaurant._id, tableId: table._id, dateKey: key, sequence, orderNumber: `${key}-${String(sequence).padStart(4, "0")}`, idempotencyKey: input.idempotencyKey, canonicalPayloadHash: hash, trackingTokenHash: await hashOpaqueToken(trackingToken), trackingTokenCiphertext: encrypted.tokenCiphertext, trackingTokenIv: encrypted.tokenIv, trackingTokenKeyVersion: encrypted.tokenKeyVersion, status: "pending", paymentStatus: "unpaid", currency: restaurant.currency ?? "MMK", submittedAt: now, subtotalMinor: subtotal, taxMinor: tax, serviceChargeMinor: service, totalMinor: total, items })
-    await ctx.db.insert("orderStatusEvents", { orderId, restaurantId: restaurant._id, toStatus: "pending", createdAt: now })
+    await ctx.db.insert("orderStatusEvents", { orderId, restaurantId: restaurant._id, toStatus: "pending", createdAt: now, timezone: restaurant.timezone ?? "Asia/Yangon", businessDate: key })
     return response((await ctx.db.get("orders", orderId))!, trackingToken)
 }
 function response(order: Doc<"orders">, trackingToken: string) { return { orderId: order._id, orderNumber: order.orderNumber, trackingToken, status: "pending" as const, paymentStatus: "unpaid" as const, totalMinor: order.totalMinor, currency: order.currency } }

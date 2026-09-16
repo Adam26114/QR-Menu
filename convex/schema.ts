@@ -272,7 +272,9 @@ export default defineSchema({
         trackingTokenIv: v.string(),
         trackingTokenKeyVersion: v.number(),
         status: v.union(v.literal("pending"), v.literal("preparing"), v.literal("served"), v.literal("cancelled")),
-        paymentStatus: v.literal("unpaid"),
+        paymentStatus: v.union(v.literal("paid"), v.literal("unpaid")),
+        paidAt: v.optional(v.number()),
+        paidByTokenIdentifier: v.optional(v.string()),
         currency: v.string(),
         submittedAt: v.number(),
         subtotalMinor: v.number(),
@@ -290,6 +292,7 @@ export default defineSchema({
         })),
     })
         .index("by_restaurant_date_sequence", ["restaurantId", "dateKey", "sequence"])
+        .index("by_restaurant_status_date_sequence", ["restaurantId", "status", "dateKey", "sequence"])
         .index("by_restaurant_idempotency", ["restaurantId", "idempotencyKey"])
         .index("by_restaurant_table_idempotency", ["restaurantId", "tableId", "idempotencyKey"])
         .index("by_tracking_token_hash", ["trackingTokenHash"]),
@@ -305,7 +308,31 @@ export default defineSchema({
         toStatus: v.union(v.literal("pending"), v.literal("preparing"), v.literal("served"), v.literal("cancelled")),
         actorTokenIdentifier: v.optional(v.string()),
         createdAt: v.number(),
+        timezone: v.optional(v.string()),
+        businessDate: v.optional(v.string()),
     })
         .index("by_order_created_at", ["orderId", "createdAt"])
+        .index("by_restaurant_created_at", ["restaurantId", "createdAt"]),
+    orderPaymentEvents: defineTable({
+        orderId: v.id("orders"),
+        restaurantId: v.id("restaurants"),
+        fromPaymentStatus: v.optional(v.union(v.literal("paid"), v.literal("unpaid"))),
+        toPaymentStatus: v.union(v.literal("paid"), v.literal("unpaid")),
+        actorTokenIdentifier: v.string(),
+        createdAt: v.number(),
+        timezone: v.string(),
+        businessDate: v.string(),
+    })
+        .index("by_order_created_at", ["orderId", "createdAt"])
+        .index("by_restaurant_created_at", ["restaurantId", "createdAt"]),
+    orderOperationKeys: defineTable({
+        orderId: v.id("orders"),
+        restaurantId: v.id("restaurants"),
+        idempotencyKey: v.string(),
+        operationKind: v.union(v.literal("status"), v.literal("payment")),
+        canonicalPayloadHash: v.string(),
+        createdAt: v.number(),
+    })
+        .index("by_order_and_key", ["orderId", "idempotencyKey"])
         .index("by_restaurant_created_at", ["restaurantId", "createdAt"]),
 })

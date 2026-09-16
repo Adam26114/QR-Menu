@@ -67,7 +67,7 @@ export async function requireActiveMembership(
     if (requirement === "owner" && membership.role !== "owner") {
         throw expectedError(ERROR_CODES.FORBIDDEN, "Owner access required")
     }
-    if (requirement === "canMarkPaid" && !membership.canMarkPaid) {
+    if (requirement === "canMarkPaid" && membership.role !== "owner" && !membership.canMarkPaid) {
         throw expectedError(ERROR_CODES.FORBIDDEN, "Payment access required")
     }
     return membership
