@@ -1,4 +1,9 @@
-import { configureStore } from "@reduxjs/toolkit"
+import { configureStore, type Middleware } from "@reduxjs/toolkit"
+import cartReducer, {
+    loadPersistedCart,
+    persistCart,
+    restoreCart,
+} from "./slices/cart.slice"
 import uiReducer from "./slices/ui.slice"
 
 /**
@@ -7,6 +12,21 @@ import uiReducer from "./slices/ui.slice"
  * WHY: Convex remains the source of truth for server data and query results.
  * WHERE: Providers supplies this store to the Next app.
  */
-export const store = configureStore({ reducer: { ui: uiReducer } })
+export const store = configureStore({
+    reducer: { ui: uiReducer, cart: cartReducer },
+    middleware: (getDefaultMiddleware) =>
+        getDefaultMiddleware().concat(((api) => (next) => (action) => {
+            const result = next(action)
+            if (typeof window !== "undefined" && typeof action === "object" && action !== null && "type" in action && typeof action.type === "string" && action.type.startsWith("cart/")) {
+                persistCart(window.localStorage, api.getState().cart)
+            }
+            return result
+        }) satisfies Middleware),
+})
+
+if (typeof window !== "undefined") {
+    const persisted = loadPersistedCart(window.localStorage)
+    store.dispatch(restoreCart(persisted))
+}
 export type RootState = ReturnType<typeof store.getState>
 export type AppDispatch = typeof store.dispatch

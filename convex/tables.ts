@@ -28,8 +28,9 @@ const table = v.object({
     createdAt: v.number(),
     updatedAt: v.number(),
 })
-const publicChoice = v.object({ name: v.string(), priceDeltaMinor: v.number() })
+const publicChoice = v.object({ choiceId: v.id("menuOptionChoices"), name: v.string(), priceDeltaMinor: v.number() })
 const publicGroup = v.object({
+    groupId: v.id("menuOptionGroups"),
     name: v.string(),
     selectionMode: v.union(v.literal("single"), v.literal("multiple")),
     required: v.boolean(),
@@ -38,18 +39,21 @@ const publicGroup = v.object({
     choices: v.array(publicChoice),
 })
 const publicItem = v.object({
+    itemId: v.id("menuItems"),
     name: v.string(),
     description: v.optional(v.string()),
     priceMinor: v.number(),
+    available: v.boolean(),
     imageUrl: v.union(v.string(), v.null()),
     options: v.array(publicGroup),
 })
 const publicCategory = v.object({
+    categoryId: v.id("menuCategories"),
     name: v.string(),
     items: v.array(publicItem),
 })
 const publicMenu = v.object({
-    restaurant: v.object({ name: v.string(), slug: v.string() }),
+    restaurant: v.object({ name: v.string(), slug: v.string(), currency: v.optional(v.string()) }),
     table: v.object({ name: v.string() }),
     categories: v.array(publicCategory),
 })
@@ -374,9 +378,7 @@ export const resolvePublic = query({
             )
                 return null
             const safeItems = []
-            for (const item of items.filter(
-                (x) => !x.archived && x.available
-            )) {
+            for (const item of items.filter((x) => !x.archived)) {
                 const groups = await ctx.db
                     .query("menuOptionGroups")
                     .withIndex("by_menu_item_id_and_sort_order", (q) =>
@@ -410,6 +412,7 @@ export const resolvePublic = query({
                     )
                         return null
                     options.push({
+                        groupId: group._id,
                         name: group.name,
                         selectionMode: group.selectionMode,
                         required: group.required,
@@ -418,6 +421,7 @@ export const resolvePublic = query({
                         choices: choices
                             .filter((x) => !x.archived)
                             .map((x) => ({
+                                choiceId: x._id,
                                 name: x.name,
                                 priceDeltaMinor: x.priceDeltaMinor,
                             })),
@@ -439,17 +443,19 @@ export const resolvePublic = query({
                         imageUrl = await ctx.storage.getUrl(item.imageStorageId)
                 }
                 safeItems.push({
+                    itemId: item._id,
                     name: item.name,
                     description: item.description,
                     priceMinor: item.priceMinor,
+                    available: item.available,
                     imageUrl,
                     options,
                 })
             }
-            safeCategories.push({ name: category.name, items: safeItems })
+            safeCategories.push({ categoryId: category._id, name: category.name, items: safeItems })
         }
         return {
-            restaurant: { name: restaurant.name, slug: restaurant.slug },
+            restaurant: { name: restaurant.name, slug: restaurant.slug, currency: restaurant.currency },
             table: { name: row.name },
             categories: safeCategories,
         }

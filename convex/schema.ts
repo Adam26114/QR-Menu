@@ -50,6 +50,8 @@ export default defineSchema({
         timezone: v.optional(v.string()),
         taxBps: v.optional(v.number()),
         serviceChargeBps: v.optional(v.number()),
+        publicOrderRateWindowStartMinute: v.optional(v.number()),
+        publicOrderRateCount: v.optional(v.number()),
         acceptanceMode: v.optional(
             v.union(
                 v.literal("open"),
@@ -257,4 +259,53 @@ export default defineSchema({
             "sortOrder",
         ])
         .index("by_restaurant_id", ["restaurantId"]),
+    orders: defineTable({
+        restaurantId: v.id("restaurants"),
+        tableId: v.id("restaurantTables"),
+        dateKey: v.string(),
+        sequence: v.number(),
+        orderNumber: v.string(),
+        idempotencyKey: v.string(),
+        canonicalPayloadHash: v.string(),
+        trackingTokenHash: v.string(),
+        trackingTokenCiphertext: v.string(),
+        trackingTokenIv: v.string(),
+        trackingTokenKeyVersion: v.number(),
+        status: v.union(v.literal("pending"), v.literal("preparing"), v.literal("served"), v.literal("cancelled")),
+        paymentStatus: v.literal("unpaid"),
+        currency: v.string(),
+        submittedAt: v.number(),
+        subtotalMinor: v.number(),
+        taxMinor: v.number(),
+        serviceChargeMinor: v.number(),
+        totalMinor: v.number(),
+        items: v.array(v.object({
+            itemName: v.string(),
+            basePriceMinor: v.number(),
+            unitPriceMinor: v.number(),
+            quantity: v.number(),
+            notes: v.optional(v.string()),
+            options: v.array(v.object({ name: v.string(), priceDeltaMinor: v.number() })),
+            lineTotalMinor: v.number(),
+        })),
+    })
+        .index("by_restaurant_date_sequence", ["restaurantId", "dateKey", "sequence"])
+        .index("by_restaurant_idempotency", ["restaurantId", "idempotencyKey"])
+        .index("by_restaurant_table_idempotency", ["restaurantId", "tableId", "idempotencyKey"])
+        .index("by_tracking_token_hash", ["trackingTokenHash"]),
+    orderCounters: defineTable({
+        restaurantId: v.id("restaurants"),
+        dateKey: v.string(),
+        nextSequence: v.number(),
+    }).index("by_restaurant_date", ["restaurantId", "dateKey"]),
+    orderStatusEvents: defineTable({
+        orderId: v.id("orders"),
+        restaurantId: v.id("restaurants"),
+        fromStatus: v.optional(v.union(v.literal("pending"), v.literal("preparing"), v.literal("served"), v.literal("cancelled"))),
+        toStatus: v.union(v.literal("pending"), v.literal("preparing"), v.literal("served"), v.literal("cancelled")),
+        actorTokenIdentifier: v.optional(v.string()),
+        createdAt: v.number(),
+    })
+        .index("by_order_created_at", ["orderId", "createdAt"])
+        .index("by_restaurant_created_at", ["restaurantId", "createdAt"]),
 })

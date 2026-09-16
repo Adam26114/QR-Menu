@@ -63,6 +63,31 @@ async function encrypt(token: string) {
         tokenKeyVersion: KEY_VERSION,
     }
 }
+export async function hashOpaqueToken(token: string) {
+    return digest(token)
+}
+export async function encryptOpaqueToken(token: string) {
+    const value = await encrypt(token)
+    return {
+        tokenCiphertext: value.tokenCiphertext,
+        tokenIv: value.tokenIv,
+        tokenKeyVersion: value.tokenKeyVersion,
+    }
+}
+export async function decryptOpaqueToken(row: {
+    tokenCiphertext: string
+    tokenIv: string
+    tokenKeyVersion: number
+}) {
+    if (row.tokenKeyVersion !== KEY_VERSION)
+        throw expectedError(ERROR_CODES.CONFLICT, "Token encryption version is unsupported")
+    const bytes = await crypto.subtle.decrypt(
+        { name: "AES-GCM", iv: base64ToBytes(row.tokenIv) as unknown as ArrayBuffer },
+        await cryptoKey(),
+        base64ToBytes(row.tokenCiphertext) as unknown as ArrayBuffer
+    )
+    return new TextDecoder().decode(bytes)
+}
 async function decrypt(row: Doc<"restaurantTables">): Promise<string> {
     if (row.tokenKeyVersion !== KEY_VERSION)
         throw expectedError(
