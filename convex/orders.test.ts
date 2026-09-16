@@ -139,10 +139,10 @@ test("staff operations expose safe paginated rows and payment audit data", async
     const order = await t.mutation(api.orders.submitPublic, { restaurantSlug: "orders-cafe", tableToken: table.token, idempotencyKey: "ops-order", items: [{ itemId, quantity: 1, choiceIds: [choiceId] }] })
     const preparing = await owner.mutation(api.orders.updateStatus, { orderId: order.orderId, status: "preparing", idempotencyKey: "status-1" })
     expect(preparing).toMatchObject({ orderId: order.orderId, status: "preparing", tableName: "A1", paymentStatus: "unpaid" })
-    const paid = await owner.mutation(api.orders.updatePayment, { orderId: order.orderId, paymentStatus: "paid", idempotencyKey: "payment-1" })
+    const paid = await owner.mutation(api.orders.updatePayment, { orderId: order.orderId, paymentStatus: "paid", paymentMethod: "cash", idempotencyKey: "payment-1" })
     expect(paid).toMatchObject({ orderId: order.orderId, paymentStatus: "paid" })
     expect(paid.paidAt).toEqual(expect.any(Number))
-    expect(await owner.mutation(api.orders.updatePayment, { orderId: order.orderId, paymentStatus: "paid", idempotencyKey: "payment-1" })).toEqual(paid)
+    expect(await owner.mutation(api.orders.updatePayment, { orderId: order.orderId, paymentStatus: "paid", paymentMethod: "cash", idempotencyKey: "payment-1" })).toEqual(paid)
     const unpaid = await owner.mutation(api.orders.updatePayment, { orderId: order.orderId, paymentStatus: "unpaid", idempotencyKey: "payment-2" })
     expect(unpaid).toMatchObject({ orderId: order.orderId, paymentStatus: "unpaid" })
     expect(unpaid).not.toHaveProperty("paidAt")
@@ -154,6 +154,27 @@ test("staff operations expose safe paginated rows and payment audit data", async
     expect(JSON.stringify(page.page[0])).not.toContain("trackingToken")
     const events = await t.run(async (ctx) => ctx.db.query("orderPaymentEvents").withIndex("by_order_created_at", (q) => q.eq("orderId", order.orderId)).collect())
     expect(events[0]).toMatchObject({ toPaymentStatus: "paid", actorTokenIdentifier: "issuer|owner", timezone: "Asia/Yangon" })
+})
+
+test("payment reports use the order currency snapshot after restaurant currency changes", async () => {
+    const { t, owner, restaurantId, table, itemId, choiceId } = await setup()
+    const order = await t.mutation(api.orders.submitPublic, { restaurantSlug: "orders-cafe", tableToken: table.token, idempotencyKey: "currency-snapshot", items: [{ itemId, quantity: 1, choiceIds: [choiceId] }] })
+    await t.run(async (ctx) => ctx.db.patch(restaurantId, { currency: "USD" }))
+    await owner.mutation(api.orders.updatePayment, { orderId: order.orderId, paymentStatus: "paid", paymentMethod: "cash", idempotencyKey: "currency-paid" })
+    const stored = await t.run(async (ctx) => ctx.db.get("orders", order.orderId))
+    expect(stored?.paymentCurrency).toBe("MMK")
+    await expect(owner.query(api.reports.getBestSellingItems, { restaurantId, fromBusinessDate: "20260101", toBusinessDate: "20261231" })).resolves.toEqual([{ name: "Noodles", currency: "MMK", timezone: "Asia/Yangon", quantity: 1, grossMinor: 1250 }])
+})
+
+test("payment contribution fails closed when duplicate summaries already exist", async () => {
+    const { t, owner, restaurantId, table, itemId, choiceId } = await setup()
+    const order = await t.mutation(api.orders.submitPublic, { restaurantSlug: "orders-cafe", tableToken: table.token, idempotencyKey: "duplicate-summary", items: [{ itemId, quantity: 1, choiceIds: [choiceId] }] })
+    await t.run(async (ctx) => {
+        const fields = { restaurantId, businessDate: "20260916", timezone: "Asia/Yangon", currency: "MMK", paidOrderCount: 0, subtotalMinor: 0, taxMinor: 0, serviceChargeMinor: 0, totalMinor: 0, cashMinor: 0, cardMinor: 0, digitalMinor: 0, otherMinor: 0, cashOrderCount: 0, cardOrderCount: 0, digitalOrderCount: 0, otherOrderCount: 0 }
+        await ctx.db.insert("salesSummaryDaily", fields)
+        await ctx.db.insert("salesSummaryDaily", fields)
+    })
+    await expect(owner.mutation(api.orders.updatePayment, { orderId: order.orderId, paymentStatus: "paid", paymentMethod: "cash", idempotencyKey: "duplicate-summary-paid" })).rejects.toThrow("CONFLICT")
 })
 
 test("status keys are required, normalized, bounded, and replay-safe", async () => {
@@ -182,6 +203,6 @@ test("list filters status before pagination and cancellation is owner-only", asy
     await expect(staff.mutation(api.orders.updateStatus, { orderId: second.orderId, status: "cancelled", idempotencyKey: "staff-cancel" })).rejects.toThrow("FORBIDDEN")
     const cancelled = await owner.mutation(api.orders.updateStatus, { orderId: second.orderId, status: "cancelled", idempotencyKey: "owner-cancel" })
     expect(cancelled.status).toBe("cancelled")
-    await expect(owner.mutation(api.orders.updatePayment, { orderId: first.orderId, paymentStatus: "paid", idempotencyKey: "filter-paid" })).resolves.toMatchObject({ paymentStatus: "paid" })
+    await expect(owner.mutation(api.orders.updatePayment, { orderId: first.orderId, paymentStatus: "paid", paymentMethod: "cash", idempotencyKey: "filter-paid" })).resolves.toMatchObject({ paymentStatus: "paid" })
     await expect(owner.mutation(api.orders.updateStatus, { orderId: first.orderId, status: "cancelled", idempotencyKey: "paid-cancel" })).rejects.toThrow("CONFLICT")
 })

@@ -24,6 +24,7 @@ import { MenuWorkspace } from "../menu/MenuWorkspace"
 import { TablesWorkspace } from "./TablesWorkspace"
 import { StaffWorkspace } from "./StaffWorkspace"
 import { OrdersWorkspace } from "../orders/OrdersWorkspace"
+import { ReportsWorkspace } from "../reports/ReportsWorkspace"
 
 export function RestaurantWorkspace({
     section = "overview",
@@ -67,6 +68,8 @@ export function RestaurantWorkspace({
     }
     if (section === "orders")
         return <OrdersWorkspace restaurant={restaurant} membership={membership} />
+    if (section === "reports")
+        return <ReportsWorkspace restaurant={restaurant} />
     if (section === "overview")
         return (
             <Overview

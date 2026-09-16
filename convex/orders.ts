@@ -4,15 +4,16 @@ import { mutation, query } from "./_generated/server"
 import { protectedMutation, protectedQuery } from "./lib/customFunctions"
 import { expectedError, ERROR_CODES } from "./lib/errors"
 import { requireActiveMembership, requireIdentity } from "./model/identity"
-import { submit } from "./model/orders"
+import { addPaymentContribution, reversePaymentContribution, submit, type PaymentMethod } from "./model/orders"
 import { hashOpaqueToken } from "./model/tables"
 import { dateKey } from "./model/orders"
 
 const line = v.object({ itemId: v.id("menuItems"), quantity: v.number(), choiceIds: v.array(v.id("menuOptionChoices")), notes: v.optional(v.string()) })
 const paymentStatuses = v.union(v.literal("paid"), v.literal("unpaid"))
+const paymentMethods = v.union(v.literal("cash"), v.literal("card"), v.literal("digital"), v.literal("other"))
 const statusValues = v.union(v.literal("pending"), v.literal("preparing"), v.literal("served"), v.literal("cancelled"))
 const itemSnapshot = v.object({ name: v.string(), quantity: v.number(), unitPriceMinor: v.number(), options: v.array(v.object({ name: v.string(), priceDeltaMinor: v.number() })), lineTotalMinor: v.number(), notes: v.optional(v.string()) })
-const safeOrder = v.object({ orderId: v.id("orders"), orderNumber: v.string(), tableName: v.union(v.string(), v.null()), status: statusValues, paymentStatus: paymentStatuses, submittedAt: v.number(), currency: v.string(), subtotalMinor: v.number(), taxMinor: v.number(), serviceChargeMinor: v.number(), totalMinor: v.number(), items: v.array(itemSnapshot), paidAt: v.optional(v.number()) })
+const safeOrder = v.object({ orderId: v.id("orders"), orderNumber: v.string(), tableName: v.union(v.string(), v.null()), status: statusValues, paymentStatus: paymentStatuses, submittedAt: v.number(), currency: v.string(), subtotalMinor: v.number(), taxMinor: v.number(), serviceChargeMinor: v.number(), totalMinor: v.number(), items: v.array(itemSnapshot), paidAt: v.optional(v.number()), paymentMethod: v.optional(paymentMethods) })
 const submitResult = v.object({ orderId: v.id("orders"), orderNumber: v.string(), trackingToken: v.string(), status: v.literal("pending"), paymentStatus: paymentStatuses, totalMinor: v.number(), currency: v.string() })
 export const submitPublic = mutation({
     args: { restaurantSlug: v.string(), tableToken: v.string(), idempotencyKey: v.string(), items: v.array(line) },
@@ -23,7 +24,7 @@ export const submitPublic = mutation({
 const tracking = v.object({
     restaurantName: v.string(), tableName: v.string(), orderNumber: v.string(),
     status: v.union(v.literal("pending"), v.literal("preparing"), v.literal("served"), v.literal("cancelled")),
-    paymentStatus: paymentStatuses, paidAt: v.optional(v.number()), submittedAt: v.number(), currency: v.string(),
+    paymentStatus: paymentStatuses, paidAt: v.optional(v.number()), paymentMethod: v.optional(paymentMethods), submittedAt: v.number(), currency: v.string(),
     subtotalMinor: v.number(), taxMinor: v.number(), serviceChargeMinor: v.number(), totalMinor: v.number(),
     items: v.array(v.object({ name: v.string(), quantity: v.number(), unitPriceMinor: v.number(), options: v.array(v.object({ name: v.string(), priceDeltaMinor: v.number() })), lineTotalMinor: v.number(), notes: v.optional(v.string()) })),
 })
@@ -41,7 +42,7 @@ export const resolvePublicTracking = query({
         const restaurant = await ctx.db.get("restaurants", order.restaurantId)
         const table = await ctx.db.get("restaurantTables", order.tableId)
         if (!restaurant || restaurant.slug !== restaurantSlug || !table) return null
-        return { restaurantName: restaurant.name, tableName: table.name, orderNumber: order.orderNumber, status: order.status, paymentStatus: order.paymentStatus, ...(order.paidAt ? { paidAt: order.paidAt } : {}), submittedAt: order.submittedAt, currency: order.currency, subtotalMinor: order.subtotalMinor, taxMinor: order.taxMinor, serviceChargeMinor: order.serviceChargeMinor, totalMinor: order.totalMinor, items: order.items.map((item) => ({ name: item.itemName, quantity: item.quantity, unitPriceMinor: item.unitPriceMinor, options: item.options, lineTotalMinor: item.lineTotalMinor, ...(item.notes ? { notes: item.notes } : {}) })) }
+        return { restaurantName: restaurant.name, tableName: table.name, orderNumber: order.orderNumber, status: order.status, paymentStatus: order.paymentStatus, ...(order.paidAt ? { paidAt: order.paidAt } : {}), ...(order.paymentMethod ? { paymentMethod: order.paymentMethod } : {}), submittedAt: order.submittedAt, currency: order.currency, subtotalMinor: order.subtotalMinor, taxMinor: order.taxMinor, serviceChargeMinor: order.serviceChargeMinor, totalMinor: order.totalMinor, items: order.items.map((item) => ({ name: item.itemName, quantity: item.quantity, unitPriceMinor: item.unitPriceMinor, options: item.options, lineTotalMinor: item.lineTotalMinor, ...(item.notes ? { notes: item.notes } : {}) })) }
     },
 })
 
@@ -52,9 +53,9 @@ export const updateStatus = protectedMutation({
 })
 
 export const updatePayment = protectedMutation({
-    args: { orderId: v.id("orders"), paymentStatus: paymentStatuses, idempotencyKey: v.string() },
+    args: { orderId: v.id("orders"), paymentStatus: paymentStatuses, paymentMethod: v.optional(paymentMethods), idempotencyKey: v.string() },
     returns: safeOrder,
-    handler: async (ctx, args) => updateOrderPayment(ctx, args.orderId, args.paymentStatus, args.idempotencyKey),
+    handler: async (ctx, args) => updateOrderPayment(ctx, args.orderId, args.paymentStatus, args.paymentMethod as PaymentMethod | undefined, args.idempotencyKey),
 })
 
 export const list = protectedQuery({
@@ -73,7 +74,7 @@ export const list = protectedQuery({
 
 async function safeRow(ctx: any, order: any) {
     const table = await ctx.db.get("restaurantTables", order.tableId)
-    return { orderId: order._id, orderNumber: order.orderNumber, tableName: table?.name ?? null, status: order.status, paymentStatus: order.paymentStatus, submittedAt: order.submittedAt, currency: order.currency, subtotalMinor: order.subtotalMinor, taxMinor: order.taxMinor, serviceChargeMinor: order.serviceChargeMinor, totalMinor: order.totalMinor, items: order.items.map((item: any) => ({ name: item.itemName, quantity: item.quantity, unitPriceMinor: item.unitPriceMinor, options: item.options, lineTotalMinor: item.lineTotalMinor, ...(item.notes ? { notes: item.notes } : {}) })), ...(order.paidAt ? { paidAt: order.paidAt } : {}) }
+    return { orderId: order._id, orderNumber: order.orderNumber, tableName: table?.name ?? null, status: order.status, paymentStatus: order.paymentStatus, submittedAt: order.submittedAt, currency: order.currency, subtotalMinor: order.subtotalMinor, taxMinor: order.taxMinor, serviceChargeMinor: order.serviceChargeMinor, totalMinor: order.totalMinor, items: order.items.map((item: any) => ({ name: item.itemName, quantity: item.quantity, unitPriceMinor: item.unitPriceMinor, options: item.options, lineTotalMinor: item.lineTotalMinor, ...(item.notes ? { notes: item.notes } : {}) })), ...(order.paidAt ? { paidAt: order.paidAt } : {}), ...(order.paymentMethod ? { paymentMethod: order.paymentMethod } : {}) }
 }
 
 async function operation(ctx: any, order: any, keyArg: string, kind: "status" | "payment", payload: string) {
@@ -110,22 +111,33 @@ async function updateOrderStatus(ctx: any, orderId: any, status: any, keyArg: st
     return safeRow(ctx, { ...order, status })
 }
 
-async function updateOrderPayment(ctx: any, orderId: any, paymentStatus: "paid" | "unpaid", key: string) {
+async function updateOrderPayment(ctx: any, orderId: any, paymentStatus: "paid" | "unpaid", paymentMethod: PaymentMethod | undefined, key: string) {
     const order = await ctx.db.get("orders", orderId)
     if (!order) throw expectedError(ERROR_CODES.NOT_FOUND, "Order not found")
     const identity = await requireIdentity(ctx)
     const restaurant = await ctx.db.get("restaurants", order.restaurantId)
     if (!restaurant) throw expectedError(ERROR_CODES.NOT_FOUND, "Restaurant not found")
     await requireActiveMembership(ctx, order.restaurantId, paymentStatus === "paid" ? "canMarkPaid" : "owner")
-    const replay = await operation(ctx, order, key, "payment", JSON.stringify({ paymentStatus }))
+    if (paymentStatus === "paid" && !paymentMethod) throw expectedError(ERROR_CODES.VALIDATION_FAILED, "Payment method is required")
+    if (paymentStatus === "unpaid" && paymentMethod) throw expectedError(ERROR_CODES.VALIDATION_FAILED, "Payment method must be omitted when unpaid")
+    const replay = await operation(ctx, order, key, "payment", JSON.stringify({ paymentStatus, paymentMethod }))
     if (replay === true) return safeRow(ctx, order)
     if (order.status === "cancelled" || order.paymentStatus === paymentStatus) throw expectedError(ERROR_CODES.CONFLICT, "Invalid payment transition")
     const now = Date.now()
     const timezone = restaurant.timezone ?? "Asia/Yangon"
-    await ctx.db.patch(orderId, paymentStatus === "paid" ? { paymentStatus, paidAt: now, paidByTokenIdentifier: identity.tokenIdentifier } : { paymentStatus, paidAt: undefined, paidByTokenIdentifier: undefined })
+    if (paymentStatus === "paid") {
+        const timezone = restaurant.timezone ?? "Asia/Yangon"
+        const currency = order.currency
+        const contribution = await addPaymentContribution(ctx, order.restaurantId, dateKey(now, timezone), timezone, currency, order, paymentMethod!)
+        await ctx.db.patch(orderId, { paymentStatus, paidAt: now, paidByTokenIdentifier: identity.tokenIdentifier, paymentMethod, paymentBusinessDate: contribution.businessDate, paymentTimezone: timezone, paymentCurrency: currency, paymentContribution: contribution })
+    } else {
+        if (!order.paymentContribution) throw expectedError(ERROR_CODES.CONFLICT, "Payment contribution is missing")
+        await reversePaymentContribution(ctx, order.paymentContribution)
+        await ctx.db.patch(orderId, { paymentStatus, paidAt: undefined, paidByTokenIdentifier: undefined, paymentMethod: undefined, paymentBusinessDate: undefined, paymentTimezone: undefined, paymentCurrency: undefined, paymentContribution: undefined })
+    }
     await ctx.db.insert("orderOperationKeys", { orderId, restaurantId: order.restaurantId, idempotencyKey: (replay as { key: string }).key, operationKind: "payment", canonicalPayloadHash: (replay as { hash: string }).hash, createdAt: now })
     await ctx.db.insert("orderPaymentEvents", { orderId, restaurantId: order.restaurantId, fromPaymentStatus: order.paymentStatus, toPaymentStatus: paymentStatus, actorTokenIdentifier: identity.tokenIdentifier, createdAt: now, timezone, businessDate: dateKey(now, timezone) })
-    if (paymentStatus === "paid") return safeRow(ctx, { ...order, paymentStatus, paidAt: now })
-    const { paidAt: _paidAt, paidByTokenIdentifier: _paidByTokenIdentifier, ...unpaidOrder } = order
+    if (paymentStatus === "paid") return safeRow(ctx, { ...order, paymentStatus, paidAt: now, paymentMethod })
+    const { paidAt: _paidAt, paidByTokenIdentifier: _paidByTokenIdentifier, paymentMethod: _paymentMethod, ...unpaidOrder } = order
     return safeRow(ctx, { ...unpaidOrder, paymentStatus })
 }

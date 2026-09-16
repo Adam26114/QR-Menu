@@ -33,7 +33,26 @@ type Order = {
         notes?: string
     }>
     paidAt?: number
+    paymentMethod?: PaymentMethod
 }
+
+function OrderCard({ order, membership, working, onStatus, onPayment, onCancel }: { order: Order; membership: Membership; working: string | null; onStatus: (order: Order, status: "preparing" | "served") => Promise<void>; onPayment: (order: Order, status: "paid" | "unpaid", paymentMethod?: PaymentMethod) => Promise<void>; onCancel: () => void }) {
+    const busy = working?.startsWith(order.orderId) ?? false
+    const canUpdatePayment = order.paymentStatus === "paid" ? membership.role === "owner" : membership.canMarkPaid
+    const canCancel = (order.status === "pending" || order.status === "preparing") && order.paymentStatus === "unpaid" && membership.role === "owner"
+    const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("cash")
+    return <Card className="overflow-hidden border-border/80">
+        <CardHeader className="gap-3 border-b bg-muted/20 sm:flex-row sm:items-start sm:justify-between"><div><CardTitle className="text-lg">Order {order.orderNumber}</CardTitle><p className="mt-1 flex flex-wrap gap-x-2 text-sm text-muted-foreground"><span>{order.tableName ?? "No table"}</span><span aria-hidden="true">·</span><time dateTime={new Date(order.submittedAt).toISOString()} title={new Date(order.submittedAt).toLocaleString()}>{relativeTime(order.submittedAt)}</time></p></div><div className="flex gap-2"><span className="rounded-full bg-primary/10 px-2.5 py-1 text-xs font-semibold capitalize text-primary">{order.status}</span><span className={`rounded-full px-2.5 py-1 text-xs font-semibold capitalize ${order.paymentStatus === "paid" ? "bg-emerald-500/10 text-emerald-700" : "bg-amber-500/10 text-amber-700"}`}>{order.paymentStatus}</span></div></CardHeader>
+        <CardContent className="space-y-4 pt-5"><ul className="space-y-3">{order.items.map((item, index) => <li key={`${item.name}-${index}`} className="flex justify-between gap-3 text-sm"><div><span className="font-medium">{item.quantity} × {item.name}</span>{item.options.length > 0 && <p className="text-xs text-muted-foreground">{item.options.map((option) => option.name).join(", ")}</p>}{item.notes && <p className="text-xs text-muted-foreground italic">Note: {item.notes}</p>}</div><span className="shrink-0 tabular-nums">{money(item.lineTotalMinor, order.currency)}</span></li>)}</ul>
+            <div className="grid grid-cols-3 gap-2 border-t pt-3 text-xs text-muted-foreground"><span>Subtotal<br /><b className="text-foreground">{money(order.subtotalMinor, order.currency)}</b></span><span>Tax / service<br /><b className="text-foreground">{money(order.taxMinor + order.serviceChargeMinor, order.currency)}</b></span><span className="text-right">Total<br /><b className="text-base text-foreground">{money(order.totalMinor, order.currency)}</b></span></div>
+            {order.paymentStatus === "paid" && order.paymentMethod && <p className="text-sm text-muted-foreground">Paid by <span className="font-medium capitalize text-foreground">{order.paymentMethod}</span></p>}
+            <div className="flex flex-wrap items-center gap-2">{order.paymentStatus === "unpaid" && canUpdatePayment && <div className="flex min-w-48 flex-1 items-center gap-2"><label htmlFor={`payment-method-${order.orderId}`} className="sr-only">Payment method</label><select id={`payment-method-${order.orderId}`} value={paymentMethod} onChange={(event) => setPaymentMethod(event.target.value as PaymentMethod)} disabled={busy} className="h-9 min-w-0 flex-1 rounded-lg border bg-background px-3 text-sm capitalize outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50">{paymentMethods.map((method) => <option key={method} value={method}>{method}</option>)}</select><Button size="sm" disabled={busy} onClick={() => onPayment(order, "paid", paymentMethod)}><CircleDollarSign /> Mark paid</Button></div>}{order.paymentStatus === "paid" && membership.role === "owner" && <Button size="sm" variant="outline" disabled={busy} onClick={() => onPayment(order, "unpaid")}>Mark unpaid</Button>}{order.status === "pending" && <Button size="sm" variant="secondary" disabled={busy} onClick={() => onStatus(order, "preparing")}><Clock3 /> Prepare</Button>}{order.status === "preparing" && <Button size="sm" variant="secondary" disabled={busy} onClick={() => onStatus(order, "served")}><Check /> Mark served</Button>}{canCancel && <Button size="sm" variant="ghost" disabled={busy} onClick={onCancel}><X /> Cancel</Button>}</div>
+        </CardContent>
+    </Card>
+}
+
+type PaymentMethod = "cash" | "card" | "digital" | "other"
+const paymentMethods: PaymentMethod[] = ["cash", "card", "digital", "other"]
 
 const tabs = ["all", "pending", "preparing", "served", "cancelled"] as const
 type Tab = (typeof tabs)[number]
@@ -157,11 +176,11 @@ export function OrdersWorkspace({ restaurant, membership }: { restaurant: Restau
             setConfirmOrder(null)
         } catch (error) { toast.error(safeError(error, "Could not update the order.")) } finally { setWorking(null) }
     }
-    const runPayment = async (order: Order, paymentStatus: "paid" | "unpaid") => {
+    const runPayment = async (order: Order, paymentStatus: "paid" | "unpaid", paymentMethod?: PaymentMethod) => {
         const action = `payment-${paymentStatus}`
         setWorking(`${order.orderId}:${action}`)
         try {
-            await paymentMutation({ orderId: order.orderId, paymentStatus, idempotencyKey: idempotencyKey(order.orderId, action, keys.current) })
+            await paymentMutation({ orderId: order.orderId, paymentStatus, ...(paymentStatus === "paid" ? { paymentMethod } : {}), idempotencyKey: idempotencyKey(order.orderId, action, keys.current) })
             toast.success(paymentStatus === "paid" ? "Order marked paid." : "Order marked unpaid.")
         } catch (error) { toast.error(safeError(error, "Could not update payment.")) } finally { setWorking(null) }
     }
@@ -187,10 +206,4 @@ export function OrdersWorkspace({ restaurant, membership }: { restaurant: Restau
         {displayFeed.status === "LoadingMore" && <p className="text-center text-sm text-muted-foreground">Loading more orders...</p>}
         <ConfirmDialog open={confirmOrder !== null} onOpenChange={(open) => !open && setConfirmOrder(null)} title="Cancel this order?" description="This cannot be undone. Paid orders cannot be cancelled." confirmLabel="Cancel order" cancelLabel="Keep order" pending={working !== null} onConfirm={async () => { const order = visible.find((item) => item.orderId === confirmOrder); if (order) await runStatus(order, "cancelled") }} />
     </section>
-}
-
-function OrderCard({ order, membership, working, onStatus, onPayment, onCancel }: { order: Order; membership: Membership; working: string | null; onStatus: (order: Order, status: "preparing" | "served") => Promise<void>; onPayment: (order: Order, status: "paid" | "unpaid") => Promise<void>; onCancel: () => void }) {
-    const busy = working?.startsWith(order.orderId) ?? false
-    const canUpdatePayment = order.paymentStatus === "paid" ? membership.role === "owner" : membership.canMarkPaid
-    return <Card className="overflow-hidden border-border/80"><CardHeader className="gap-3 border-b bg-muted/20 sm:flex-row sm:items-start sm:justify-between"><div><CardTitle className="text-lg">Order {order.orderNumber}</CardTitle><p className="mt-1 flex flex-wrap gap-x-2 text-sm text-muted-foreground"><span>{order.tableName ?? "No table"}</span><span aria-hidden="true">·</span><time dateTime={new Date(order.submittedAt).toISOString()} title={new Date(order.submittedAt).toLocaleString()}>{relativeTime(order.submittedAt)}</time></p></div><div className="flex gap-2"><span className="rounded-full bg-primary/10 px-2.5 py-1 text-xs font-semibold capitalize text-primary">{order.status}</span><span className={`rounded-full px-2.5 py-1 text-xs font-semibold capitalize ${order.paymentStatus === "paid" ? "bg-emerald-500/10 text-emerald-700" : "bg-amber-500/10 text-amber-700"}`}>{order.paymentStatus}</span></div></CardHeader><CardContent className="space-y-4 pt-5"><ul className="space-y-3">{order.items.map((item, index) => <li key={`${item.name}-${index}`} className="flex justify-between gap-3 text-sm"><div><span className="font-medium">{item.quantity} × {item.name}</span>{item.options.length > 0 && <p className="text-xs text-muted-foreground">{item.options.map((option) => option.name).join(", ")}</p>}{item.notes && <p className="text-xs text-muted-foreground italic">Note: {item.notes}</p>}</div><span className="shrink-0 tabular-nums">{money(item.lineTotalMinor, order.currency)}</span></li>)}</ul><div className="grid grid-cols-3 gap-2 border-t pt-3 text-xs text-muted-foreground"><span>Subtotal<br /><b className="text-foreground">{money(order.subtotalMinor, order.currency)}</b></span><span>Tax / service<br /><b className="text-foreground">{money(order.taxMinor + order.serviceChargeMinor, order.currency)}</b></span><span className="text-right">Total<br /><b className="text-base text-foreground">{money(order.totalMinor, order.currency)}</b></span></div><div className="flex flex-wrap gap-2"><div className="flex flex-1 flex-wrap gap-2">{order.status === "pending" && <Button size="sm" disabled={busy} onClick={() => onStatus(order, "preparing")}><Clock3 /> Start preparing</Button>}{order.status === "preparing" && <Button size="sm" disabled={busy} onClick={() => onStatus(order, "served")}><Check /> Mark served</Button>}{(order.status === "pending" || order.status === "preparing") && order.paymentStatus === "unpaid" && membership.role === "owner" && <Button size="sm" variant="destructive" disabled={busy} onClick={onCancel}><X /> Cancel</Button>}</div>{order.status !== "cancelled" && canUpdatePayment && <Button size="sm" variant="outline" disabled={busy} onClick={() => onPayment(order, order.paymentStatus === "paid" ? "unpaid" : "paid")}><CircleDollarSign /> Mark {order.paymentStatus === "paid" ? "unpaid" : "paid"}</Button>}</div></CardContent></Card>
 }

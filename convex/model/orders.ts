@@ -11,6 +11,20 @@ export type SubmittedLine = {
     choiceIds: Id<"menuOptionChoices">[]
     notes?: string
 }
+export type PaymentMethod = "cash" | "card" | "digital" | "other"
+export type PaymentContribution = {
+    restaurantId: Id<"restaurants">
+    summaryId: Id<"salesSummaryDaily">
+    businessDate: string
+    timezone: string
+    currency: string
+    subtotalMinor: number
+    taxMinor: number
+    serviceChargeMinor: number
+    totalMinor: number
+    paymentMethod: PaymentMethod
+    items: { name: string; quantity: number; grossMinor: number }[]
+}
 export function canonicalize(slug: string, token: string, key: string, items: SubmittedLine[]) {
     const restaurantSlug = slug.trim().toLowerCase()
     const tableToken = token.trim()
@@ -45,6 +59,112 @@ function dateKey(now: number, timezone: string) {
     const parts = new Intl.DateTimeFormat("en-CA", { timeZone: timezone, year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(now)
     const get = (type: string) => parts.find((p) => p.type === type)?.value ?? "00"
     return `${get("year")}${get("month")}${get("day")}`
+}
+
+const methodFields = (method: PaymentMethod) => ({
+    [`${method}Minor`]: 1,
+    [`${method}OrderCount`]: 1,
+})
+
+export async function addPaymentContribution(ctx: MutationCtx, restaurantId: Id<"restaurants">, businessDate: string, timezone: string, currency: string, order: Doc<"orders">, paymentMethod: PaymentMethod): Promise<PaymentContribution> {
+    const restaurant = await ctx.db.get("restaurants", restaurantId)
+    if (!restaurant) throw expectedError(ERROR_CODES.CONFLICT, "Restaurant is missing")
+    await ctx.db.patch(restaurantId, { salesSummaryRevision: (restaurant.salesSummaryRevision ?? 0) + 1 })
+    const summaries = await ctx.db.query("salesSummaryDaily").withIndex("by_restaurant_business_date_currency_timezone", (q) => q.eq("restaurantId", restaurantId).eq("businessDate", businessDate).eq("currency", currency).eq("timezone", timezone)).take(2)
+    if (summaries.length > 1) throw expectedError(ERROR_CODES.CONFLICT, "Duplicate sales summary records")
+    let summary: Doc<"salesSummaryDaily">
+    if (summaries[0]) {
+        summary = summaries[0]
+    } else {
+        const summaryId = await ctx.db.insert("salesSummaryDaily", {
+            restaurantId, businessDate, timezone, currency, paidOrderCount: 0, subtotalMinor: 0, taxMinor: 0, serviceChargeMinor: 0, totalMinor: 0,
+            cashMinor: 0, cardMinor: 0, digitalMinor: 0, otherMinor: 0, cashOrderCount: 0, cardOrderCount: 0, digitalOrderCount: 0, otherOrderCount: 0,
+        })
+        const insertedSummary = await ctx.db.get("salesSummaryDaily", summaryId)
+        if (!insertedSummary) throw expectedError(ERROR_CODES.CONFLICT, "Sales summary record is missing")
+        summary = insertedSummary
+    }
+    const itemsByName = new Map<string, { name: string; quantity: number; grossMinor: number }>()
+    for (const item of order.items) {
+        const current = itemsByName.get(item.itemName)
+        if (current) {
+            current.quantity += item.quantity
+            current.grossMinor += item.lineTotalMinor
+        } else {
+            itemsByName.set(item.itemName, { name: item.itemName, quantity: item.quantity, grossMinor: item.lineTotalMinor })
+        }
+    }
+    const items = [...itemsByName.values()]
+    const existingItems = await ctx.db.query("salesSummaryItems").withIndex("by_summary_id", (q) => q.eq("summaryId", summary._id)).take(1001)
+    if (existingItems.length > 1000) throw expectedError(ERROR_CODES.CONFLICT, "Summary item limit exceeded")
+    const existingNames = new Set(existingItems.map((item) => item.name))
+    const newDistinctNames = items.filter((item) => !existingNames.has(item.name)).length
+    if (existingItems.length + newDistinctNames > 1000) throw expectedError(ERROR_CODES.CONFLICT, "Summary item limit exceeded")
+    const contribution: PaymentContribution = { restaurantId, summaryId: summary._id, businessDate, timezone, currency, subtotalMinor: order.subtotalMinor, taxMinor: order.taxMinor, serviceChargeMinor: order.serviceChargeMinor, totalMinor: order.totalMinor, paymentMethod, items }
+    const field = methodFields(paymentMethod)
+    const summaryPatch: Record<string, number> = {
+        paidOrderCount: summary.paidOrderCount + 1,
+        subtotalMinor: summary.subtotalMinor + order.subtotalMinor,
+        taxMinor: summary.taxMinor + order.taxMinor,
+        serviceChargeMinor: summary.serviceChargeMinor + order.serviceChargeMinor,
+        totalMinor: summary.totalMinor + order.totalMinor,
+    }
+    summaryPatch[Object.keys(field)[0]!] = (summary as any)[Object.keys(field)[0]!] + order.totalMinor
+    summaryPatch[Object.keys(field)[1]!] = (summary as any)[Object.keys(field)[1]!] + 1
+    await ctx.db.patch(summary._id, summaryPatch as any)
+    for (const item of items) {
+        const current = existingItems.find((row) => row.name === item.name)
+        if (current) await ctx.db.patch(current._id, { quantity: current.quantity + item.quantity, grossMinor: current.grossMinor + item.grossMinor })
+        else await ctx.db.insert("salesSummaryItems", { summaryId: summary._id, restaurantId, businessDate, currency, ...item })
+    }
+    return contribution
+}
+
+export async function reversePaymentContribution(ctx: MutationCtx, contribution: PaymentContribution) {
+    const restaurant = await ctx.db.get("restaurants", contribution.restaurantId)
+    if (!restaurant) throw expectedError(ERROR_CODES.CONFLICT, "Restaurant is missing")
+    const summary = await ctx.db.get("salesSummaryDaily", contribution.summaryId)
+    if (!summary) throw expectedError(ERROR_CODES.CONFLICT, "Payment contribution summary is missing")
+    if (summary.restaurantId !== contribution.restaurantId || summary.businessDate !== contribution.businessDate || summary.currency !== contribution.currency || summary.timezone !== contribution.timezone)
+        throw expectedError(ERROR_CODES.CONFLICT, "Payment contribution summary does not match")
+    const method = contribution.paymentMethod
+    const methodMinor = `${method}Minor` as keyof typeof summary
+    const methodCount = `${method}OrderCount` as keyof typeof summary
+    const nextValues = {
+        paidOrderCount: summary.paidOrderCount - 1,
+        subtotalMinor: summary.subtotalMinor - contribution.subtotalMinor,
+        taxMinor: summary.taxMinor - contribution.taxMinor,
+        serviceChargeMinor: summary.serviceChargeMinor - contribution.serviceChargeMinor,
+        totalMinor: summary.totalMinor - contribution.totalMinor,
+        methodMinor: (summary[methodMinor] as number) - contribution.totalMinor,
+        methodCount: (summary[methodCount] as number) - 1,
+    }
+    if (Object.values(nextValues).some((value) => value < 0)) throw expectedError(ERROR_CODES.CONFLICT, "Payment contribution summary is stale")
+    const rows = await ctx.db.query("salesSummaryItems").withIndex("by_summary_id", (q) => q.eq("summaryId", contribution.summaryId)).take(1001)
+    if (rows.length > 1000) throw expectedError(ERROR_CODES.CONFLICT, "Summary item limit exceeded")
+    const requiredItems = new Map<string, { quantity: number; grossMinor: number }>()
+    for (const item of contribution.items) {
+        const required = requiredItems.get(item.name) ?? { quantity: 0, grossMinor: 0 }
+        required.quantity += item.quantity; required.grossMinor += item.grossMinor; requiredItems.set(item.name, required)
+    }
+    for (const [name, required] of requiredItems) {
+        const row = rows.find((candidate) => candidate.name === name)
+        if (!row || row.quantity < required.quantity || row.grossMinor < required.grossMinor) throw expectedError(ERROR_CODES.CONFLICT, "Payment contribution item is stale")
+    }
+    await ctx.db.patch(contribution.restaurantId, { salesSummaryRevision: (restaurant.salesSummaryRevision ?? 0) + 1 })
+    await ctx.db.patch(summary._id, {
+        paidOrderCount: nextValues.paidOrderCount,
+        subtotalMinor: nextValues.subtotalMinor,
+        taxMinor: nextValues.taxMinor,
+        serviceChargeMinor: nextValues.serviceChargeMinor,
+        totalMinor: nextValues.totalMinor,
+        [methodMinor]: nextValues.methodMinor,
+        [methodCount]: nextValues.methodCount,
+    } as any)
+    for (const [name, required] of requiredItems) {
+        const row = rows.find((candidate) => candidate.name === name)!
+        await ctx.db.patch(row._id, { quantity: row.quantity - required.quantity, grossMinor: row.grossMinor - required.grossMinor })
+    }
 }
 async function one<T>(ctx: QueryCtx | MutationCtx, table: T, id: Id<any>): Promise<any> {
     const row = await ctx.db.get(table as never, id as never)

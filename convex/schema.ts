@@ -73,6 +73,7 @@ export default defineSchema({
             )
         ),
         firstOrderAt: v.optional(v.number()),
+        salesSummaryRevision: v.optional(v.number()),
     }).index("by_slug", ["slug"]),
     restaurantSlugAliases: defineTable({
         restaurantId: v.id("restaurants"),
@@ -275,6 +276,23 @@ export default defineSchema({
         paymentStatus: v.union(v.literal("paid"), v.literal("unpaid")),
         paidAt: v.optional(v.number()),
         paidByTokenIdentifier: v.optional(v.string()),
+        paymentMethod: v.optional(v.union(v.literal("cash"), v.literal("card"), v.literal("digital"), v.literal("other"))),
+        paymentBusinessDate: v.optional(v.string()),
+        paymentTimezone: v.optional(v.string()),
+        paymentCurrency: v.optional(v.string()),
+        paymentContribution: v.optional(v.object({
+            restaurantId: v.id("restaurants"),
+            summaryId: v.id("salesSummaryDaily"),
+            businessDate: v.string(),
+            timezone: v.string(),
+            currency: v.string(),
+            subtotalMinor: v.number(),
+            taxMinor: v.number(),
+            serviceChargeMinor: v.number(),
+            totalMinor: v.number(),
+            paymentMethod: v.union(v.literal("cash"), v.literal("card"), v.literal("digital"), v.literal("other")),
+            items: v.array(v.object({ name: v.string(), quantity: v.number(), grossMinor: v.number() })),
+        })),
         currency: v.string(),
         submittedAt: v.number(),
         subtotalMinor: v.number(),
@@ -335,4 +353,34 @@ export default defineSchema({
     })
         .index("by_order_and_key", ["orderId", "idempotencyKey"])
         .index("by_restaurant_created_at", ["restaurantId", "createdAt"]),
+    salesSummaryDaily: defineTable({
+        restaurantId: v.id("restaurants"),
+        businessDate: v.string(),
+        timezone: v.string(),
+        currency: v.string(),
+        paidOrderCount: v.number(),
+        subtotalMinor: v.number(),
+        taxMinor: v.number(),
+        serviceChargeMinor: v.number(),
+        totalMinor: v.number(),
+        cashMinor: v.number(),
+        cardMinor: v.number(),
+        digitalMinor: v.number(),
+        otherMinor: v.number(),
+        cashOrderCount: v.number(),
+        cardOrderCount: v.number(),
+        digitalOrderCount: v.number(),
+        otherOrderCount: v.number(),
+    }).index("by_restaurant_business_date", ["restaurantId", "businessDate"])
+        .index("by_restaurant_business_date_currency_timezone", ["restaurantId", "businessDate", "currency", "timezone"]),
+    salesSummaryItems: defineTable({
+        summaryId: v.id("salesSummaryDaily"),
+        restaurantId: v.id("restaurants"),
+        businessDate: v.string(),
+        currency: v.string(),
+        name: v.string(),
+        quantity: v.number(),
+        grossMinor: v.number(),
+    }).index("by_summary_id", ["summaryId"])
+        .index("by_restaurant_business_date", ["restaurantId", "businessDate"]),
 })
