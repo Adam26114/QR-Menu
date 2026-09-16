@@ -1,5 +1,6 @@
 "use client"
 
+import Link from "next/link"
 import { Component, type ReactNode, useState } from "react"
 import { useMutation, useQuery } from "convex/react"
 import { api } from "../../../../convex/_generated/api"
@@ -13,8 +14,18 @@ import {
 } from "@workspace/ui/components/card"
 import { Input } from "@workspace/ui/components/input"
 import { Textarea } from "@workspace/ui/components/textarea"
+import { ConfirmDialog } from "@/components/global/ConfirmDialog"
 
 type Props = { restaurant: Doc<"restaurants"> }
+
+function formatMmk(minor: number) {
+    const safe = Number.isFinite(minor) ? Math.max(0, minor) : 0
+    return new Intl.NumberFormat("en-MM", {
+        style: "currency",
+        currency: "MMK",
+        maximumFractionDigits: 0,
+    }).format(safe / 100)
+}
 
 function friendlyError(error: unknown, fallback: string) {
     const message = error instanceof Error ? error.message.toLowerCase() : ""
@@ -268,6 +279,7 @@ function ItemEditor({
                 placeholder="Item name"
                 aria-label="Item name"
                 aria-invalid={Boolean(error)}
+                autoFocus={!item}
             />
             <Textarea
                 value={description}
@@ -552,13 +564,6 @@ function OptionChoiceEditor({
     )
 }
 
-function confirmArchive(label: string) {
-    return (
-        typeof window === "undefined" ||
-        window.confirm(`Archive ${label}? You can restore it later.`)
-    )
-}
-
 function OptionGroup({ group }: { group: Doc<"menuOptionGroups"> }) {
     const choices = useQuery(api.menu.listOptionChoices, {
         optionGroupId: group._id,
@@ -573,14 +578,17 @@ function OptionGroup({ group }: { group: Doc<"menuOptionGroups"> }) {
         useState<Id<"menuOptionChoices">>()
     const [error, setError] = useState<unknown>()
     const [pending, setPending] = useState(false)
+    const [confirm, setConfirm] = useState<"group" | Id<"menuOptionChoices">>()
     async function run(action: () => Promise<unknown>) {
         if (pending) return
         setError(undefined)
         setPending(true)
         try {
             await action()
+            return true
         } catch (e) {
             setError(e)
+            return false
         } finally {
             setPending(false)
         }
@@ -634,12 +642,7 @@ function OptionGroup({ group }: { group: Doc<"menuOptionGroups"> }) {
                         <Button
                             type="button"
                             size="sm"
-                            onClick={() => {
-                                if (confirmArchive("this option group"))
-                                    void run(() =>
-                                        archive({ optionGroupId: group._id })
-                                    )
-                            }}
+                            onClick={() => setConfirm("group")}
                             disabled={pending}
                         >
                             Archive
@@ -724,15 +727,7 @@ function OptionGroup({ group }: { group: Doc<"menuOptionGroups"> }) {
                                         type="button"
                                         size="sm"
                                         variant="ghost"
-                                        onClick={() => {
-                                            if (confirmArchive("this choice"))
-                                                void run(() =>
-                                                    archiveChoice({
-                                                        optionChoiceId:
-                                                            choice._id,
-                                                    })
-                                                )
-                                        }}
+                                        onClick={() => setConfirm(choice._id)}
                                         disabled={pending}
                                     >
                                         Archive
@@ -754,6 +749,84 @@ function OptionGroup({ group }: { group: Doc<"menuOptionGroups"> }) {
                 )}
             </div>
             <ErrorMessage error={error} />
+            <ConfirmDialog
+                open={Boolean(confirm)}
+                onOpenChange={(open) => !open && setConfirm(undefined)}
+                title={`Archive this ${confirm && confirm !== "group" ? "choice" : "option group"}?`}
+                description="You can restore this record later."
+                confirmLabel="Archive"
+                cancelLabel="Cancel"
+                pending={pending}
+                onConfirm={async () => {
+                     const succeeded = await run(() =>
+                         confirm && confirm !== "group"
+                             ? archiveChoice({ optionChoiceId: confirm })
+                             : archive({ optionGroupId: group._id })
+                     )
+                     if (!succeeded) throw new Error("Unable to complete this action.")
+                     setConfirm(undefined)
+                 }}
+             />
+        </div>
+    )
+}
+
+function MenuItemCard({
+    item,
+    category,
+    canEdit,
+    onToggleAvailability,
+}: {
+    item: {
+        _id: Id<"menuItems">
+        name: string
+        description?: string
+        priceMinor: number
+        available: boolean
+        archived: boolean
+        imageUrl: string | null
+    }
+    category: Doc<"menuCategories">
+    canEdit: boolean
+    onToggleAvailability?: () => void
+}) {
+    return (
+        <div className="grid gap-3 rounded-xl border bg-card p-3 shadow-sm">
+            <div className="grid aspect-[4/3] place-items-center overflow-hidden rounded-lg bg-muted text-sm text-muted-foreground">
+                {item.imageUrl ? (
+                    <img
+                        src={item.imageUrl}
+                        alt={item.name}
+                        className="size-full object-cover"
+                    />
+                ) : (
+                    "No image"
+                )}
+            </div>
+            <div>
+                <span className="font-medium">
+                    {item.name} - {formatMmk(item.priceMinor)}
+                </span>
+                {item.description && (
+                    <p className="text-sm text-muted-foreground">{item.description}</p>
+                )}
+                <p className="text-sm text-muted-foreground">
+                    <span className="mr-2 rounded-full bg-muted px-2 py-0.5">
+                        {item.available ? "Available" : "Unavailable"}
+                    </span>
+                    {item.archived && (
+                        <span className="rounded-full bg-muted px-2 py-0.5">Archived</span>
+                    )}
+                </p>
+            </div>
+            {canEdit && !item.archived && onToggleAvailability && (
+                <Button type="button" onClick={onToggleAvailability}>
+                    {item.available ? "Mark unavailable" : "Mark available"}
+                </Button>
+            )}
+            {!canEdit && category.archived && (
+                <p className="text-xs text-muted-foreground">Category archived</p>
+            )}
         </div>
     )
 }
@@ -824,19 +897,26 @@ function MenuWorkspaceContent({ restaurant }: Props) {
     const restoreItem = useMutation(api.menu.restoreItem)
     const setAvailability = useMutation(api.menu.setAvailability)
     const [selected, setSelected] = useState<Id<"menuCategories">>()
+    const [categoryFilter, setCategoryFilter] = useState<Id<"menuCategories"> | "all">("all")
+    const [showArchived, setShowArchived] = useState(false)
     const [editingCategory, setEditingCategory] =
         useState<Id<"menuCategories">>()
     const [editingItem, setEditingItem] = useState<Id<"menuItems">>()
+    const [addingItem, setAddingItem] = useState(false)
     const [error, setError] = useState<unknown>()
     const [pending, setPending] = useState(false)
+    const [confirm, setConfirm] = useState<{ kind: "category" | "item"; id: string }>()
     if (categories === undefined || items === undefined)
         return <p role="status">Loading menu...</p>
     const active = categories.filter((category) => !category.archived)
     const category =
-        categories.find((value) => value._id === selected) ?? active[0]
-    const categoryItems = category
-        ? items.filter((item) => item.categoryId === category._id)
-        : []
+        categories.find(
+            (value) =>
+                value._id === selected && (showArchived || !value.archived)
+        ) ?? active[0]
+    const categoryItems = items.filter((item) =>
+        categoryFilter === "all" ? true : item.categoryId === categoryFilter
+    ).filter((item) => showArchived || !item.archived)
     const activeCategoryItems = categoryItems.filter((item) => !item.archived)
     async function run(action: () => Promise<unknown>) {
         if (pending) return
@@ -844,8 +924,10 @@ function MenuWorkspaceContent({ restaurant }: Props) {
         setPending(true)
         try {
             await action()
+            return true
         } catch (e) {
             setError(e)
+            return false
         } finally {
             setPending(false)
         }
@@ -862,29 +944,79 @@ function MenuWorkspaceContent({ restaurant }: Props) {
             })
         )
     }
-    async function moveItem(index: number, direction: -1 | 1) {
-        if (!category) return
-        const next = [...activeCategoryItems]
+    async function moveItem(
+        targetCategory: Doc<"menuCategories">,
+        index: number,
+        direction: -1 | 1
+    ) {
+        const targetItems = (items ?? [])
+            .filter((item) => item.categoryId === targetCategory._id && !item.archived)
+        const next = [...targetItems]
         const target = index + direction
         if (target < 0 || target >= next.length) return
         ;[next[index], next[target]] = [next[target]!, next[index]!]
         await run(() =>
             reorderItems({
                 restaurantId: restaurant._id,
-                categoryId: category._id,
+                categoryId: targetCategory._id,
                 orderedItemIds: next.map((value) => value._id),
             })
         )
     }
     return (
         <section className="mx-auto grid max-w-6xl gap-6">
+            <header className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                    <p className="text-xs font-semibold uppercase tracking-[0.18em] text-primary">Catalog</p>
+                    <h1 className="text-2xl font-semibold tracking-tight">Menu</h1>
+                </div>
+                <div className="flex gap-2">
+                     <Button
+                         type="button"
+                         onClick={() => {
+                             const target = category ?? active[0]
+                             if (!target) {
+                                 setError(new Error("Add a category before adding an item."))
+                                 return
+                             }
+                             setCategoryFilter(target._id)
+                             setSelected(target._id)
+                             setEditingItem(undefined)
+                             setAddingItem(true)
+                         }}
+                     >
+                         Add item
+                     </Button>
+                     <Link
+                         className="inline-flex h-9 items-center justify-center rounded-md border border-input px-4 text-sm font-medium hover:bg-accent hover:text-accent-foreground"
+                         href={`/dashboard/${restaurant.slug}/tables`}
+                     >
+                         Tables
+                     </Link>
+                </div>
+            </header>
+            <div className="flex flex-wrap items-center gap-2" aria-label="Menu categories">
+                <Button type="button" size="sm" variant={categoryFilter === "all" ? "default" : "outline"} onClick={() => setCategoryFilter("all")}>All</Button>
+                {categories.map((value) => (showArchived || !value.archived) && <Button key={value._id} type="button" size="sm" variant={categoryFilter === value._id ? "default" : "outline"} onClick={() => { setCategoryFilter(value._id); setSelected(value._id) }}>{value.name}{value.archived ? " (archived)" : ""}</Button>)}
+                 <label className="ml-auto flex items-center gap-2 text-sm"><input type="checkbox" checked={showArchived} onChange={(event) => {
+                     const nextShowArchived = event.target.checked
+                     setShowArchived(nextShowArchived)
+                     if (!nextShowArchived && selected) {
+                         const selectedCategory = categories.find((value) => value._id === selected)
+                         if (selectedCategory?.archived) {
+                             setSelected(undefined)
+                             setCategoryFilter("all")
+                         }
+                     }
+                 }} /> Show archived</label>
+            </div>
             <ErrorMessage
                 error={error}
                 fallback="Unable to update the menu. Please try again."
             />
             <Card>
                 <CardHeader>
-                    <CardTitle>Menu categories</CardTitle>
+                    <CardTitle>Categories</CardTitle>
                 </CardHeader>
                 <CardContent className="grid gap-3">
                     <CategoryEditor
@@ -900,7 +1032,7 @@ function MenuWorkspaceContent({ restaurant }: Props) {
                             the menu.
                         </p>
                     ) : (
-                        categories.map((value) => {
+                        categories.filter((value) => showArchived || !value.archived).map((value) => {
                             const index = active.findIndex(
                                 (entry) => entry._id === value._id
                             )
@@ -936,19 +1068,7 @@ function MenuWorkspaceContent({ restaurant }: Props) {
                                             <Button
                                                 type="button"
                                                 size="sm"
-                                                onClick={() => {
-                                                    if (
-                                                        confirmArchive(
-                                                            "this category"
-                                                        )
-                                                    )
-                                                        void run(() =>
-                                                            archiveCategory({
-                                                                categoryId:
-                                                                    value._id,
-                                                            })
-                                                        )
-                                                }}
+                                                onClick={() => setConfirm({ kind: "category", id: value._id })}
                                                 disabled={pending}
                                             >
                                                 Archive
@@ -1006,17 +1126,76 @@ function MenuWorkspaceContent({ restaurant }: Props) {
                     )}
                 </CardContent>
             </Card>
-            {category && (
-                <Card>
+             {categoryFilter === "all" ? (
+                 categories
+                     .filter((value) => showArchived || !value.archived)
+                     .map((value) => {
+                         const valueItems = items.filter(
+                             (item) =>
+                                 item.categoryId === value._id &&
+                                 (showArchived || !item.archived)
+                         )
+                         return (
+                             <Card key={value._id}>
+                                 <CardHeader>
+                                    <CardTitle className="flex flex-wrap items-center justify-between gap-2">
+                                        {value.name}
+                                        <Button
+                                            type="button"
+                                            size="sm"
+                                            variant="outline"
+                                            onClick={() => {
+                                                setCategoryFilter(value._id)
+                                                setSelected(value._id)
+                                            }}
+                                        >
+                                            Manage category
+                                        </Button>
+                                    </CardTitle>
+                                 </CardHeader>
+                                 <CardContent>
+                                     {valueItems.length === 0 ? (
+                                         <p className="text-sm text-muted-foreground">
+                                             No items in this category yet.
+                                         </p>
+                                     ) : (
+                                         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                                             {valueItems.map((item) => (
+                                                 <MenuItemCard
+                                                     key={item._id}
+                                                      item={item}
+                                                      category={value}
+                                                      canEdit={true}
+                                                      onToggleAvailability={() =>
+                                                          void run(() =>
+                                                              setAvailability({
+                                                                  itemId: item._id,
+                                                                  available: !item.available,
+                                                              })
+                                                          )
+                                                      }
+                                                  />
+                                             ))}
+                                         </div>
+                                     )}
+                                 </CardContent>
+                             </Card>
+                         )
+                     })
+             ) : category ? (
+                 <Card>
                     <CardHeader>
                         <CardTitle>{category.name}</CardTitle>
                     </CardHeader>
-                    <CardContent className="grid gap-4">
-                        {!category.archived && (
+                    <CardContent className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                         {!category.archived && addingItem && (
                             <ItemEditor
                                 restaurantId={restaurant._id}
                                 categoryId={category._id}
-                                onDone={() => setError(undefined)}
+                                onDone={() => {
+                                    setAddingItem(false)
+                                    setError(undefined)
+                                }}
                             />
                         )}
                         {categoryItems.length === 0 ? (
@@ -1031,12 +1210,15 @@ function MenuWorkspaceContent({ restaurant }: Props) {
                             categoryItems.map((item) => (
                                 <div
                                     key={item._id}
-                                    className="grid gap-3 rounded border p-3"
+                                    className="grid gap-3 rounded-xl border bg-card p-3 shadow-sm"
                                 >
                                     <div className="flex flex-wrap items-center justify-between gap-2">
                                         <div>
+                                            <div className="mb-3 aspect-[4/3] overflow-hidden rounded-lg bg-muted">
+                                                {item.imageUrl ? <img src={item.imageUrl} alt="" className="size-full object-cover" /> : <div className="grid size-full place-items-center text-sm text-muted-foreground">No image</div>}
+                                            </div>
                                             <span className="font-medium">
-                                                {item.name} - {item.priceMinor}
+                                                {item.name} - {formatMmk(item.priceMinor)}
                                             </span>
                                             {item.description && (
                                                 <p className="text-sm text-muted-foreground">
@@ -1044,12 +1226,7 @@ function MenuWorkspaceContent({ restaurant }: Props) {
                                                 </p>
                                             )}
                                             <p className="text-sm text-muted-foreground">
-                                                {item.available
-                                                    ? "Available"
-                                                    : "Unavailable"}
-                                                {item.archived
-                                                    ? " · Archived"
-                                                    : ""}
+                                                <span className="mr-2 rounded-full bg-muted px-2 py-0.5">{item.available ? "Available" : "Unavailable"}</span>{item.archived && <span className="rounded-full bg-muted px-2 py-0.5">Archived</span>}
                                             </p>
                                         </div>
                                         <div className="flex flex-wrap gap-1">
@@ -1099,19 +1276,7 @@ function MenuWorkspaceContent({ restaurant }: Props) {
                                                             type="button"
                                                             size="sm"
                                                             onClick={() => {
-                                                                if (
-                                                                    confirmArchive(
-                                                                        "this item"
-                                                                    )
-                                                                )
-                                                                    void run(
-                                                                        () =>
-                                                                            archiveItem(
-                                                                                {
-                                                                                    itemId: item._id,
-                                                                                }
-                                                                            )
-                                                                    )
+                                                                 setConfirm({ kind: "item", id: item._id })
                                                             }}
                                                             disabled={pending}
                                                         >
@@ -1120,9 +1285,10 @@ function MenuWorkspaceContent({ restaurant }: Props) {
                                                         <Button
                                                             type="button"
                                                             size="sm"
-                                                            onClick={() =>
-                                                                void moveItem(
-                                                                    activeCategoryItems.findIndex(
+                                                             onClick={() =>
+                                                                 void moveItem(
+                                                                     category,
+                                                                     activeCategoryItems.findIndex(
                                                                         (
                                                                             entry
                                                                         ) =>
@@ -1140,8 +1306,9 @@ function MenuWorkspaceContent({ restaurant }: Props) {
                                                             type="button"
                                                             size="sm"
                                                             onClick={() =>
-                                                                void moveItem(
-                                                                    activeCategoryItems.findIndex(
+                                                                 void moveItem(
+                                                                     category,
+                                                                     activeCategoryItems.findIndex(
                                                                         (
                                                                             entry
                                                                         ) =>
@@ -1195,7 +1362,28 @@ function MenuWorkspaceContent({ restaurant }: Props) {
                         )}
                     </CardContent>
                 </Card>
-            )}
+             ) : null}
+             <ConfirmDialog
+                 open={Boolean(confirm)}
+                 onOpenChange={(open) => !open && setConfirm(undefined)}
+                 title={`Archive this ${confirm?.kind === "item" ? "item" : "category"}?`}
+                 description="You can restore this record later."
+                 confirmLabel="Archive"
+                 cancelLabel="Cancel"
+                 pending={pending}
+                 onConfirm={async () => {
+                     if (!confirm) return
+                      const succeeded = await run(() =>
+                          confirm.kind === "item"
+                              ? archiveItem({ itemId: confirm.id as Id<"menuItems"> })
+                              : archiveCategory({
+                                    categoryId: confirm.id as Id<"menuCategories">,
+                                })
+                      )
+                      if (!succeeded) throw new Error("Unable to complete this action.")
+                      setConfirm(undefined)
+                  }}
+             />
         </section>
     )
 }

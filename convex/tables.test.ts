@@ -152,3 +152,154 @@ test("staff can read tables but cannot mutate them", async () => {
         })
     ).rejects.toThrow("FORBIDDEN")
 })
+
+test("table defaults, detail updates, and legacy rows preserve protected fields", async () => {
+    const t = convexTest(schema, modules)
+    const owner = t.withIdentity({
+        subject: "details-owner",
+        tokenIdentifier: "issuer|details-owner",
+    })
+    const other = t.withIdentity({
+        subject: "details-other",
+        tokenIdentifier: "issuer|details-other",
+    })
+    const restaurantId = await owner.mutation(api.restaurants.create, {
+        name: "Details Cafe",
+        slug: "details-cafe",
+        idempotencyKey: "details-cafe",
+    })
+    const otherRestaurantId = await other.mutation(api.restaurants.create, {
+        name: "Other Details Cafe",
+        slug: "other-details-cafe",
+        idempotencyKey: "other-details-cafe",
+    })
+    await t.run(async (ctx) => {
+        await ctx.db.insert("restaurantMemberships", {
+            restaurantId,
+            tokenIdentifier: "issuer|details-staff",
+            role: "staff",
+            status: "active",
+            canMarkPaid: false,
+            createdAt: 1,
+            updatedAt: 1,
+        })
+    })
+    const staff = t.withIdentity({
+        subject: "details-staff",
+        tokenIdentifier: "issuer|details-staff",
+    })
+    const created = await owner.action(api.tables.create, {
+        restaurantId,
+        name: "  Patio  ",
+    })
+    const initial = (await owner.query(api.tables.list, { restaurantId }))[0]
+    expect(initial).toMatchObject({
+        name: "Patio",
+        area: "Main floor",
+        serviceStatus: "available",
+    })
+    expect(initial).not.toHaveProperty("tokenHash")
+    expect(initial).not.toHaveProperty("tokenCiphertext")
+    expect(initial).not.toHaveProperty("tokenIv")
+
+    const tokenFields = await t.run((ctx) => ctx.db.get(created.tableId))
+    expect(tokenFields).toMatchObject({ tokenHash: expect.any(String) })
+    const updated = await owner.mutation(api.tables.updateDetails, {
+        restaurantId,
+        tableId: created.tableId,
+        name: "  Bar  ",
+        area: "  Terrace ",
+        serviceStatus: "reserved",
+        active: false,
+    })
+    expect(updated).toMatchObject({
+        name: "Bar",
+        area: "Terrace",
+        serviceStatus: "reserved",
+        active: false,
+    })
+    expect(updated).not.toHaveProperty("tokenHash")
+    const after = await t.run((ctx) => ctx.db.get(created.tableId))
+    expect(after).toMatchObject({
+        tokenHash: tokenFields?.tokenHash,
+        tokenCiphertext: tokenFields?.tokenCiphertext,
+        tokenIv: tokenFields?.tokenIv,
+        tokenKeyVersion: tokenFields?.tokenKeyVersion,
+    })
+
+    await expect(
+        other.mutation(api.tables.updateDetails, {
+            restaurantId: otherRestaurantId,
+            tableId: created.tableId,
+            name: "Nope",
+            area: "Main",
+            serviceStatus: "available",
+            active: true,
+        })
+    ).rejects.toThrow("FORBIDDEN")
+    await expect(
+        staff.mutation(api.tables.updateDetails, {
+            restaurantId,
+            tableId: created.tableId,
+            name: "Nope",
+            area: "Main",
+            serviceStatus: "available",
+            active: true,
+        })
+    ).rejects.toThrow("FORBIDDEN")
+    await expect(
+        owner.mutation(api.tables.updateDetails, {
+            restaurantId,
+            tableId: created.tableId,
+            name: "Nope",
+            area: "",
+            serviceStatus: "available",
+            active: true,
+        })
+    ).rejects.toThrow("VALIDATION_FAILED")
+    await expect(
+        owner.mutation(api.tables.updateDetails, {
+            restaurantId,
+            tableId: created.tableId,
+            name: "Nope",
+            area: "x".repeat(121),
+            serviceStatus: "available",
+            active: true,
+        })
+    ).rejects.toThrow("VALIDATION_FAILED")
+    await expect(
+        owner.mutation(api.tables.updateDetails, {
+            restaurantId,
+            tableId: created.tableId,
+            name: "Nope",
+            area: "Main",
+            // @ts-expect-error invalid service status is a contract test
+            serviceStatus: "broken",
+            active: true,
+        })
+    ).rejects.toThrow()
+
+    const legacyId = await t.run(async (ctx) =>
+        ctx.db.insert("restaurantTables", {
+            restaurantId,
+            name: "Legacy",
+            active: true,
+            archived: false,
+            tokenHash: "legacy-hash",
+            tokenCiphertext: "legacy-ciphertext",
+            tokenIv: "legacy-iv",
+            tokenKeyVersion: 1,
+            createdAt: 1,
+            updatedAt: 1,
+        })
+    )
+    expect(await owner.query(api.tables.list, { restaurantId })).toEqual(
+        expect.arrayContaining([
+            expect.objectContaining({
+                _id: legacyId,
+                area: "Main floor",
+                serviceStatus: "available",
+            }),
+        ])
+    )
+})

@@ -143,6 +143,10 @@ export default defineSchema({
     restaurantTables: defineTable({
         restaurantId: v.id("restaurants"),
         name: v.string(),
+        area: v.optional(v.string()),
+        serviceStatus: v.optional(
+            v.union(v.literal("available"), v.literal("reserved"))
+        ),
         active: v.boolean(),
         archived: v.boolean(),
         tokenHash: v.string(),

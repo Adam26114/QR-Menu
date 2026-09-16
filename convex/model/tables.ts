@@ -80,9 +80,15 @@ export async function decryptOpaqueToken(row: {
     tokenKeyVersion: number
 }) {
     if (row.tokenKeyVersion !== KEY_VERSION)
-        throw expectedError(ERROR_CODES.CONFLICT, "Token encryption version is unsupported")
+        throw expectedError(
+            ERROR_CODES.CONFLICT,
+            "Token encryption version is unsupported"
+        )
     const bytes = await crypto.subtle.decrypt(
-        { name: "AES-GCM", iv: base64ToBytes(row.tokenIv) as unknown as ArrayBuffer },
+        {
+            name: "AES-GCM",
+            iv: base64ToBytes(row.tokenIv) as unknown as ArrayBuffer,
+        },
         await cryptoKey(),
         base64ToBytes(row.tokenCiphertext) as unknown as ArrayBuffer
     )
@@ -110,6 +116,15 @@ export function normalizeTableName(name: string): string {
         throw expectedError(
             ERROR_CODES.VALIDATION_FAILED,
             "Table name is invalid"
+        )
+    return value
+}
+export function normalizeTableArea(area: string): string {
+    const value = area.trim()
+    if (!value || value.length > 120)
+        throw expectedError(
+            ERROR_CODES.VALIDATION_FAILED,
+            "Table area is invalid"
         )
     return value
 }

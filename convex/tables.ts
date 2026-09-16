@@ -15,6 +15,7 @@ import {
     decryptTableToken,
     encryptTableToken,
     normalizeTableName,
+    normalizeTableArea,
     tableForOwner,
 } from "./model/tables"
 
@@ -23,12 +24,18 @@ const table = v.object({
     _creationTime: v.number(),
     restaurantId: v.id("restaurants"),
     name: v.string(),
+    area: v.string(),
+    serviceStatus: v.union(v.literal("available"), v.literal("reserved")),
     active: v.boolean(),
     archived: v.boolean(),
     createdAt: v.number(),
     updatedAt: v.number(),
 })
-const publicChoice = v.object({ choiceId: v.id("menuOptionChoices"), name: v.string(), priceDeltaMinor: v.number() })
+const publicChoice = v.object({
+    choiceId: v.id("menuOptionChoices"),
+    name: v.string(),
+    priceDeltaMinor: v.number(),
+})
 const publicGroup = v.object({
     groupId: v.id("menuOptionGroups"),
     name: v.string(),
@@ -53,7 +60,11 @@ const publicCategory = v.object({
     items: v.array(publicItem),
 })
 const publicMenu = v.object({
-    restaurant: v.object({ name: v.string(), slug: v.string(), currency: v.optional(v.string()) }),
+    restaurant: v.object({
+        name: v.string(),
+        slug: v.string(),
+        currency: v.optional(v.string()),
+    }),
     table: v.object({ name: v.string() }),
     categories: v.array(publicCategory),
 })
@@ -64,6 +75,8 @@ function safeTable(
         | "_creationTime"
         | "restaurantId"
         | "name"
+        | "area"
+        | "serviceStatus"
         | "active"
         | "archived"
         | "createdAt"
@@ -75,6 +88,8 @@ function safeTable(
         _creationTime: row._creationTime,
         restaurantId: row.restaurantId,
         name: row.name,
+        area: row.area ?? "Main floor",
+        serviceStatus: row.serviceStatus ?? "available",
         active: row.active,
         archived: row.archived,
         createdAt: row.createdAt,
@@ -123,6 +138,10 @@ export const createInternal = internalMutation({
     args: {
         restaurantId: v.id("restaurants"),
         name: v.string(),
+        area: v.optional(v.string()),
+        serviceStatus: v.optional(
+            v.union(v.literal("available"), v.literal("reserved"))
+        ),
         tokenHash: v.string(),
         tokenCiphertext: v.string(),
         tokenIv: v.string(),
@@ -149,6 +168,11 @@ export const createInternal = internalMutation({
         return ctx.db.insert("restaurantTables", {
             restaurantId: a.restaurantId,
             name: normalizeTableName(a.name),
+            area:
+                a.area === undefined
+                    ? "Main floor"
+                    : normalizeTableArea(a.area),
+            serviceStatus: a.serviceStatus ?? "available",
             active: true,
             archived: false,
             tokenHash: a.tokenHash,
@@ -161,7 +185,14 @@ export const createInternal = internalMutation({
     },
 })
 export const create = protectedAction({
-    args: { restaurantId: v.id("restaurants"), name: v.string() },
+    args: {
+        restaurantId: v.id("restaurants"),
+        name: v.string(),
+        area: v.optional(v.string()),
+        serviceStatus: v.optional(
+            v.union(v.literal("available"), v.literal("reserved"))
+        ),
+    },
     returns: v.object({ tableId: v.id("restaurantTables"), token: v.string() }),
     handler: async (
         ctx,
@@ -175,12 +206,48 @@ export const create = protectedAction({
             {
                 restaurantId: a.restaurantId,
                 name: a.name,
+                area: a.area,
+                serviceStatus: a.serviceStatus,
                 ...encrypted,
                 tokenHash: hash,
                 tokenIdentifier: ctx.identity.tokenIdentifier,
             }
         )
         return { tableId, token }
+    },
+})
+export const updateDetails = protectedMutation({
+    args: {
+        restaurantId: v.id("restaurants"),
+        tableId: v.id("restaurantTables"),
+        name: v.string(),
+        area: v.string(),
+        serviceStatus: v.union(v.literal("available"), v.literal("reserved")),
+        active: v.boolean(),
+    },
+    returns: table,
+    handler: async (ctx, a) => {
+        const row = await tableForOwner(ctx, a.tableId, true)
+        if (row.restaurantId !== a.restaurantId)
+            throw expectedError(ERROR_CODES.FORBIDDEN, "Owner access required")
+        const name = normalizeTableName(a.name)
+        const area = normalizeTableArea(a.area)
+        const updatedAt = Date.now()
+        await ctx.db.patch(a.tableId, {
+            name,
+            area,
+            serviceStatus: a.serviceStatus,
+            active: a.active,
+            updatedAt,
+        })
+        return safeTable({
+            ...row,
+            name,
+            area,
+            serviceStatus: a.serviceStatus,
+            active: a.active,
+            updatedAt,
+        })
     },
 })
 export const rename = protectedMutation({
@@ -452,10 +519,18 @@ export const resolvePublic = query({
                     options,
                 })
             }
-            safeCategories.push({ categoryId: category._id, name: category.name, items: safeItems })
+            safeCategories.push({
+                categoryId: category._id,
+                name: category.name,
+                items: safeItems,
+            })
         }
         return {
-            restaurant: { name: restaurant.name, slug: restaurant.slug, currency: restaurant.currency },
+            restaurant: {
+                name: restaurant.name,
+                slug: restaurant.slug,
+                currency: restaurant.currency,
+            },
             table: { name: row.name },
             categories: safeCategories,
         }

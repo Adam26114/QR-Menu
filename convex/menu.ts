@@ -40,6 +40,21 @@ const item = v.object({
     createdAt: v.number(),
     updatedAt: v.number(),
 })
+const listedItem = v.object({
+    _id: v.id("menuItems"),
+    _creationTime: v.number(),
+    restaurantId: v.id("restaurants"),
+    categoryId: v.id("menuCategories"),
+    name: v.string(),
+    description: v.optional(v.string()),
+    priceMinor: v.number(),
+    available: v.boolean(),
+    archived: v.boolean(),
+    sortOrder: v.number(),
+    imageUrl: v.union(v.string(), v.null()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+})
 const group = v.object({
     _id: v.id("menuOptionGroups"),
     _creationTime: v.number(),
@@ -269,7 +284,7 @@ export const listItems = protectedQuery({
         categoryId: v.optional(v.id("menuCategories")),
         includeArchived: v.optional(v.boolean()),
     },
-    returns: v.array(item),
+    returns: v.array(listedItem),
     handler: async (ctx, a) => {
         const m = await requireActiveMembership(ctx, a.restaurantId)
         if (a.includeArchived && m.role !== "owner")
@@ -310,7 +325,43 @@ export const listItems = protectedQuery({
             },
             Promise.resolve([] as Doc<"menuItems">[])
         )
-        return a.includeArchived ? rows : rows.filter((x) => !x.archived)
+        const visibleRows = a.includeArchived
+            ? rows
+            : rows.filter((x) => !x.archived)
+        const safeRows = []
+        for (const row of visibleRows) {
+            let imageUrl: string | null = null
+            if (row.imageStorageId) {
+                const ownership = await ctx.db
+                    .query("storageUploads")
+                    .withIndex("by_storage_id", (q) =>
+                        q.eq("storageId", row.imageStorageId!)
+                    )
+                    .unique()
+                if (
+                    ownership &&
+                    ownership.restaurantId === a.restaurantId &&
+                    ownership.itemId === row._id
+                )
+                    imageUrl = await ctx.storage.getUrl(row.imageStorageId)
+            }
+            safeRows.push({
+                _id: row._id,
+                _creationTime: row._creationTime,
+                restaurantId: row.restaurantId,
+                categoryId: row.categoryId,
+                name: row.name,
+                description: row.description,
+                priceMinor: row.priceMinor,
+                available: row.available,
+                archived: row.archived,
+                sortOrder: row.sortOrder,
+                imageUrl,
+                createdAt: row.createdAt,
+                updatedAt: row.updatedAt,
+            })
+        }
+        return safeRows
     },
 })
 export const createItem = protectedMutation({

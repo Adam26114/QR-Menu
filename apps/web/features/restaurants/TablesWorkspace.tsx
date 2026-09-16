@@ -1,6 +1,14 @@
 "use client"
 
-import { Component, type ReactNode, useRef, useState } from "react"
+import Link from "next/link"
+import {
+    Component,
+    type ReactNode,
+    useCallback,
+    useEffect,
+    useRef,
+    useState,
+} from "react"
 import { useAction, useMutation, useQuery } from "convex/react"
 import { QRCodeSVG } from "qrcode.react"
 import {
@@ -25,6 +33,7 @@ import {
     CardTitle,
 } from "@workspace/ui/components/card"
 import { Input } from "@workspace/ui/components/input"
+import { ConfirmDialog } from "@/components/global/ConfirmDialog"
 
 type Props = { restaurant: Doc<"restaurants"> }
 type Table = Pick<
@@ -33,6 +42,8 @@ type Table = Pick<
     | "_creationTime"
     | "restaurantId"
     | "name"
+    | "area"
+    | "serviceStatus"
     | "active"
     | "archived"
     | "createdAt"
@@ -218,17 +229,35 @@ function TableLink({ slug, token }: { slug: string; token: string }) {
 }
 
 function TableRow({ table, slug }: { table: Table; slug: string }) {
-    const rename = useMutation(api.tables.rename)
-    const setActive = useMutation(api.tables.setActive)
+    const updateDetails = useMutation(api.tables.updateDetails)
     const archive = useMutation(api.tables.archive)
     const restore = useMutation(api.tables.restore)
     const getToken = useAction(api.tables.getToken)
     const regenerate = useAction(api.tables.regenerateToken)
     const [editing, setEditing] = useState(false)
     const [name, setName] = useState(table.name)
+    const [area, setArea] = useState(table.area ?? "Main floor")
+    const [serviceStatus, setServiceStatus] = useState<"available" | "reserved">(table.serviceStatus ?? "available")
+    const [active, setActive] = useState(table.active)
     const [token, setToken] = useState<string>()
+    const [qrOpen, setQrOpen] = useState(false)
+    const [confirmArchive, setConfirmArchive] = useState(false)
     const [pending, setPending] = useState(false)
     const [error, setError] = useState<string>()
+
+    const closeQr = useCallback(() => {
+        setQrOpen(false)
+        setToken(undefined)
+    }, [])
+
+    useEffect(() => {
+        if (!qrOpen) return
+        function handleKeyDown(event: KeyboardEvent) {
+            if (event.key === "Escape") closeQr()
+        }
+        window.addEventListener("keydown", handleKeyDown)
+        return () => window.removeEventListener("keydown", handleKeyDown)
+    }, [closeQr, qrOpen])
 
     async function run(action: () => Promise<unknown>) {
         if (pending) return false
@@ -253,13 +282,11 @@ function TableRow({ table, slug }: { table: Table; slug: string }) {
             setError("Use a table name before saving.")
             return
         }
-        const saved = await run(() =>
-            rename({ tableId: table._id, name: name.trim() })
-        )
+        const saved = await run(() => updateDetails({ restaurantId: table.restaurantId, tableId: table._id, name: name.trim(), area: area.trim() || "Main floor", serviceStatus, active }))
         if (saved) setEditing(false)
     }
 
-    const hiddenLink = table.archived || !table.active
+    const hiddenLink = table.archived || !active
     return (
         <article
             className={`grid gap-4 rounded-xl border p-4 ${table.archived ? "bg-muted/20 opacity-80" : "bg-card"}`}
@@ -271,7 +298,7 @@ function TableRow({ table, slug }: { table: Table; slug: string }) {
                             className="flex flex-wrap gap-2"
                             onSubmit={saveName}
                         >
-                            <Input
+                        <Input
                                 value={name}
                                 onChange={(event) =>
                                     setName(event.target.value)
@@ -280,6 +307,9 @@ function TableRow({ table, slug }: { table: Table; slug: string }) {
                                 className="h-8 w-48"
                                 autoFocus
                             />
+                            <Input value={area} onChange={(event) => setArea(event.target.value)} aria-label={`Area for ${table.name}`} className="h-8 w-36" />
+                            <select className="h-8 rounded-md border bg-background px-2 text-sm" value={serviceStatus} onChange={(event) => setServiceStatus(event.target.value as "available" | "reserved")} aria-label="Service status"><option value="available">Available</option><option value="reserved">Reserved</option></select>
+                            <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={active} onChange={(event) => { const nextActive = event.target.checked; setActive(nextActive); if (!nextActive) closeQr() }} /> Active</label>
                             <Button type="submit" size="sm" disabled={pending}>
                                 {pending ? "Saving..." : "Save"}
                             </Button>
@@ -293,20 +323,30 @@ function TableRow({ table, slug }: { table: Table; slug: string }) {
                                 Cancel
                             </Button>
                         </form>
-                    ) : (
-                        <h3 className="flex items-center gap-2 font-semibold tracking-tight">
-                            {table.name}
+                     ) : (
+                         <h3 className="flex items-center gap-2 font-semibold tracking-tight">
+                             {table.name}
                             {table.archived && (
                                 <span className="text-xs font-normal text-muted-foreground">
                                     Archived
                                 </span>
-                            )}
-                        </h3>
+                             )}
+                         </h3>
+                     )}
+                    {!editing && (
+                        <p className="mt-1 flex flex-wrap gap-2 text-sm text-muted-foreground">
+                            <span className="rounded-full bg-muted px-2 py-0.5">
+                                Area: {table.area ?? "Main floor"}
+                            </span>
+                            <span className="rounded-full bg-muted px-2 py-0.5">
+                                Service status: {table.serviceStatus === "reserved" ? "Reserved" : "Available"}
+                            </span>
+                        </p>
                     )}
                     <p className="mt-1 text-sm text-muted-foreground">
                         {table.archived
                             ? "Archived and not available for ordering."
-                            : table.active
+                            : active
                               ? "Active for guest ordering."
                               : "Inactive; guest ordering is paused."}
                     </p>
@@ -328,37 +368,16 @@ function TableRow({ table, slug }: { table: Table; slug: string }) {
                                 type="button"
                                 size="sm"
                                 variant="outline"
-                                onClick={() =>
-                                    void run(() =>
-                                        setActive({
-                                            tableId: table._id,
-                                            active: !table.active,
-                                        }).then(() => {
-                                            if (!table.active)
-                                                setToken(undefined)
-                                        })
-                                    )
-                                }
+                                onClick={() => setEditing(true)}
                                 disabled={pending}
                             >
-                                {table.active ? "Deactivate" : "Activate"}
+                                Edit status
                             </Button>
                             <Button
                                 type="button"
                                 size="sm"
                                 variant="destructive"
-                                onClick={() => {
-                                    if (
-                                        window.confirm(
-                                            `Archive ${table.name}? You can restore it later.`
-                                        )
-                                    )
-                                        void run(() =>
-                                            archive({
-                                                tableId: table._id,
-                                            }).then(() => setToken(undefined))
-                                        )
-                                }}
+                                onClick={() => setConfirmArchive(true)}
                                 disabled={pending}
                             >
                                 <Archive aria-hidden="true" /> Archive
@@ -387,19 +406,13 @@ function TableRow({ table, slug }: { table: Table; slug: string }) {
             {!hiddenLink && (
                 <div className="flex flex-wrap items-center gap-2 border-t pt-3">
                     {token ? (
-                        <TableLink slug={slug} token={token} />
+                        <Button type="button" size="sm" variant="secondary" onClick={() => setQrOpen(true)}>QR dialog open</Button>
                     ) : (
                         <Button
                             type="button"
                             size="sm"
                             variant="secondary"
-                            onClick={() =>
-                                void run(async () =>
-                                    setToken(
-                                        await getToken({ tableId: table._id })
-                                    )
-                                )
-                            }
+                            onClick={() => void run(async () => { setToken(await getToken({ tableId: table._id })); setQrOpen(true) })}
                             disabled={pending}
                         >
                             <Link2 aria-hidden="true" />{" "}
@@ -429,6 +442,39 @@ function TableRow({ table, slug }: { table: Table; slug: string }) {
                     )}
                 </div>
             )}
+            {qrOpen && token && (
+                 <div
+                     role="dialog"
+                     aria-modal="true"
+                     aria-labelledby={`qr-dialog-title-${table._id}`}
+                     className="fixed inset-0 z-50 grid place-items-center bg-black/50 p-4"
+                 >
+                     <div className="max-h-[90vh] w-full max-w-lg overflow-auto rounded-xl bg-background p-4">
+                         <div className="mb-3 flex items-center justify-between">
+                             <h2 id={`qr-dialog-title-${table._id}`} className="font-semibold">{table.name} ordering QR</h2>
+                            <Button type="button" variant="ghost" onClick={closeQr}>
+                                Close
+                            </Button>
+                        </div>
+                        <TableLink slug={slug} token={token} />
+                    </div>
+                </div>
+            )}
+            <ConfirmDialog
+                open={confirmArchive}
+                onOpenChange={setConfirmArchive}
+                title={`Archive ${table.name}?`}
+                description="You can restore this table later."
+                confirmLabel="Archive"
+                cancelLabel="Cancel"
+                pending={pending}
+                 onConfirm={async () => {
+                     const succeeded = await run(() => archive({ tableId: table._id }))
+                     if (!succeeded) throw new Error("Unable to complete this action.")
+                     closeQr()
+                     setConfirmArchive(false)
+                 }}
+            />
             {hiddenLink && (
                 <p
                     role="status"
@@ -450,12 +496,14 @@ function TablesWorkspaceContent({ restaurant }: Props) {
     })
     const create = useAction(api.tables.create)
     const [name, setName] = useState("")
+    const [area, setArea] = useState("Main floor")
+    const [serviceStatus, setServiceStatus] = useState<"available" | "reserved">("available")
+    const [areaFilter, setAreaFilter] = useState("All")
+    const [statusFilter, setStatusFilter] = useState<"all" | "available" | "reserved">("all")
     const [pending, setPending] = useState(false)
     const [error, setError] = useState<string>()
-    const [created, setCreated] = useState<{
-        tableId: Id<"restaurantTables">
-        token: string
-    }>()
+    const [createdTableId, setCreatedTableId] =
+        useState<Id<"restaurantTables">>()
 
     async function submit(event: React.FormEvent) {
         event.preventDefault()
@@ -466,12 +514,13 @@ function TablesWorkspaceContent({ restaurant }: Props) {
         setPending(true)
         setError(undefined)
         try {
-            setCreated(
-                await create({
-                    restaurantId: restaurant._id,
-                    name: name.trim(),
-                })
-            )
+            const result = await create({
+                restaurantId: restaurant._id,
+                name: name.trim(),
+                area,
+                serviceStatus,
+            })
+            setCreatedTableId(result.tableId)
             setName("")
         } catch (cause) {
             setError(
@@ -483,6 +532,8 @@ function TablesWorkspaceContent({ restaurant }: Props) {
     }
 
     if (tables === undefined) return <p role="status">Loading tables...</p>
+    const areas = ["All", ...Array.from(new Set(tables.map((table) => table.area)))]
+    const visibleTables = tables.filter((table) => (areaFilter === "All" || table.area === areaFilter) && (statusFilter === "all" || table.serviceStatus === statusFilter))
     return (
         <section className="mx-auto grid w-full max-w-6xl gap-6">
             <header className="flex flex-wrap items-end justify-between gap-4">
@@ -506,22 +557,30 @@ function TablesWorkspaceContent({ restaurant }: Props) {
                     Owner workspace
                 </div>
             </header>
-            {created && (
+            <div>
+                <Link
+                    className="inline-flex h-8 items-center justify-center rounded-md border border-input px-3 text-sm font-medium hover:bg-accent hover:text-accent-foreground"
+                    href={`/dashboard/${restaurant.slug}/menu`}
+                >
+                    Menu
+                </Link>
+            </div>
+            {createdTableId && (
                 <Card className="border-primary/30 bg-primary/5">
                     <CardHeader>
                         <CardTitle className="text-base">
                             Table created
                         </CardTitle>
                         <CardDescription>
-                            Keep this link handy. You can reveal it again from
-                            the table below.
+                            Your table is ready. Reveal its ordering link from
+                            the table below when you need it.
                         </CardDescription>
                     </CardHeader>
                     <CardContent>
-                        <TableLink
-                            slug={restaurant.slug}
-                            token={created.token}
-                        />
+                        <p className="text-sm text-muted-foreground">
+                            The private QR secret is only shown while its dialog
+                            is open.
+                        </p>
                     </CardContent>
                 </Card>
             )}
@@ -534,7 +593,7 @@ function TablesWorkspaceContent({ restaurant }: Props) {
                 </CardHeader>
                 <CardContent>
                     <form className="flex flex-wrap gap-2" onSubmit={submit}>
-                        <Input
+                            <Input
                             value={name}
                             onChange={(event) => setName(event.target.value)}
                             placeholder="Table name, e.g. Patio 1"
@@ -542,6 +601,8 @@ function TablesWorkspaceContent({ restaurant }: Props) {
                             className="max-w-sm"
                             disabled={pending}
                         />
+                        <Input value={area} onChange={(event) => setArea(event.target.value)} placeholder="Area" aria-label="New table area" className="max-w-xs" disabled={pending} />
+                        <select value={serviceStatus} onChange={(event) => setServiceStatus(event.target.value as "available" | "reserved")} className="h-9 rounded-md border bg-background px-2 text-sm" aria-label="New table service status"><option value="available">Available</option><option value="reserved">Reserved</option></select>
                         <Button type="submit" disabled={pending}>
                             {pending ? "Creating..." : "Create table"}
                         </Button>
@@ -556,8 +617,18 @@ function TablesWorkspaceContent({ restaurant }: Props) {
                     )}
                 </CardContent>
             </Card>
-            {tables.length === 0 ? (
-                <Card className="border-dashed">
+            <div className="flex flex-wrap items-center gap-2" aria-label="Table filters"><span className="text-sm font-medium">Areas:</span>{areas.map((value) => <Button key={value} type="button" size="sm" variant={areaFilter === value ? "default" : "outline"} onClick={() => setAreaFilter(value)}>{value}</Button>)}<select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value as typeof statusFilter)} className="h-8 rounded-md border bg-background px-2 text-sm" aria-label="Service status filter"><option value="all">All service status</option><option value="available">Available</option><option value="reserved">Reserved</option></select></div>
+             {tables.length > 0 && visibleTables.length === 0 ? (
+                 <Card className="border-dashed">
+                     <CardHeader>
+                         <CardTitle>No tables match these filters</CardTitle>
+                         <CardDescription>
+                             Try changing the area or service status filters.
+                         </CardDescription>
+                     </CardHeader>
+                 </Card>
+             ) : tables.length === 0 ? (
+                 <Card className="border-dashed">
                     <CardHeader>
                         <CardTitle>No tables yet</CardTitle>
                         <CardDescription>
@@ -567,8 +638,8 @@ function TablesWorkspaceContent({ restaurant }: Props) {
                     </CardHeader>
                 </Card>
             ) : (
-                <div className="grid gap-3">
-                    {tables.map((table) => (
+                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                    {visibleTables.map((table) => (
                         <TableRow
                             key={table._id}
                             table={table}

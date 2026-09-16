@@ -627,3 +627,116 @@ test("expired capabilities are rejected and stale image URLs resolve null", asyn
         ).toBeNull()
     })
 })
+
+test("listItems resolves only owned item images and remains tenant-scoped", async () => {
+    const t = convexTest(schema, modules)
+    const owner = t.withIdentity({
+        subject: "image-list-owner",
+        tokenIdentifier: "issuer|image-list-owner",
+    })
+    const other = t.withIdentity({
+        subject: "image-list-other",
+        tokenIdentifier: "issuer|image-list-other",
+    })
+    const restaurantId = await owner.mutation(api.restaurants.create, {
+        name: "Image List Cafe",
+        slug: "image-list-cafe",
+        idempotencyKey: "image-list-cafe",
+    })
+    const otherRestaurantId = await other.mutation(api.restaurants.create, {
+        name: "Other Image List Cafe",
+        slug: "other-image-list-cafe",
+        idempotencyKey: "other-image-list-cafe",
+    })
+    const categoryId = await owner.mutation(api.menu.createCategory, {
+        restaurantId,
+        name: "Mains",
+    })
+    const ownedItemId = await owner.mutation(api.menu.createItem, {
+        restaurantId,
+        categoryId,
+        name: "Owned image",
+        priceMinor: 100,
+    })
+    const missingItemId = await owner.mutation(api.menu.createItem, {
+        restaurantId,
+        categoryId,
+        name: "Missing image",
+        priceMinor: 200,
+    })
+    const wrongItemId = await owner.mutation(api.menu.createItem, {
+        restaurantId,
+        categoryId,
+        name: "Wrong owner relation",
+        priceMinor: 300,
+    })
+    const otherCategoryId = await other.mutation(api.menu.createCategory, {
+        restaurantId: otherRestaurantId,
+        name: "Other mains",
+    })
+    const otherItemId = await other.mutation(api.menu.createItem, {
+        restaurantId: otherRestaurantId,
+        categoryId: otherCategoryId,
+        name: "Foreign image",
+        priceMinor: 400,
+    })
+
+    const ids = await t.run(async (ctx) => {
+        const ownedStorageId = await ctx.storage.store(
+            new Blob(["owned"], { type: "image/png" })
+        )
+        const wrongStorageId = await ctx.storage.store(
+            new Blob(["wrong"], { type: "image/png" })
+        )
+        const foreignStorageId = await ctx.storage.store(
+            new Blob(["foreign"], { type: "image/png" })
+        )
+        await ctx.db.insert("storageUploads", {
+            storageId: ownedStorageId,
+            restaurantId,
+            uploadedByTokenIdentifier: "issuer|image-list-owner",
+            itemId: ownedItemId,
+            createdAt: 1,
+        })
+        await ctx.db.insert("storageUploads", {
+            storageId: wrongStorageId,
+            restaurantId,
+            uploadedByTokenIdentifier: "issuer|image-list-owner",
+            itemId: wrongItemId,
+            createdAt: 1,
+        })
+        await ctx.db.insert("storageUploads", {
+            storageId: foreignStorageId,
+            restaurantId: otherRestaurantId,
+            uploadedByTokenIdentifier: "issuer|image-list-other",
+            itemId: otherItemId,
+            createdAt: 1,
+        })
+        await ctx.db.patch(ownedItemId, { imageStorageId: ownedStorageId })
+        await ctx.db.patch(
+            missingItemId,
+            {
+                imageStorageId: missingItemId.replace(
+                    /menuItems$/,
+                    "_storage"
+                ) as Id<"_storage">,
+            }
+        )
+        await ctx.db.patch(wrongItemId, { imageStorageId: foreignStorageId })
+        return { ownedStorageId, wrongStorageId, foreignStorageId }
+    })
+
+    const listed = await owner.query(api.menu.listItems, { restaurantId })
+    expect(listed).toHaveLength(3)
+    expect(listed.find((x) => x._id === ownedItemId)?.imageUrl).toEqual(
+        expect.stringContaining("http")
+    )
+    expect(listed.find((x) => x._id === missingItemId)?.imageUrl).toBeNull()
+    expect(listed.find((x) => x._id === wrongItemId)?.imageUrl).toBeNull()
+    expect(ids.ownedStorageId).not.toBe(ids.wrongStorageId)
+    expect(ids.wrongStorageId).not.toBe(ids.foreignStorageId)
+    expect(JSON.stringify(listed)).not.toContain("uploadedByTokenIdentifier")
+    await expect(
+        other.query(api.menu.listItems, { restaurantId })
+    ).rejects.toThrow("FORBIDDEN")
+})
