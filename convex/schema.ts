@@ -91,6 +91,7 @@ export default defineSchema({
     restaurantMemberships: defineTable({
         restaurantId: v.id("restaurants"),
         tokenIdentifier: v.string(),
+        email: v.optional(v.string()),
         role: v.union(v.literal("owner"), v.literal("staff")),
         status: v.union(v.literal("active"), v.literal("revoked")),
         canMarkPaid: v.boolean(),
@@ -102,6 +103,38 @@ export default defineSchema({
         .index("by_restaurant_id_and_token_identifier", [
             "restaurantId",
             "tokenIdentifier",
+        ])
+        .index("by_restaurant_id_and_status_and_role", [
+            "restaurantId",
+            "status",
+            "role",
+        ])
+        .index("by_restaurant_id_and_email_and_status", [
+            "restaurantId",
+            "email",
+            "status",
+        ]),
+    staffInvitations: defineTable({
+        restaurantId: v.id("restaurants"),
+        email: v.string(),
+        role: v.union(v.literal("owner"), v.literal("staff")),
+        canMarkPaid: v.boolean(),
+        tokenHash: v.string(),
+        createdAt: v.number(),
+        expiresAt: v.number(),
+        revokedAt: v.optional(v.number()),
+        acceptedAt: v.optional(v.number()),
+        createdByTokenIdentifier: v.optional(v.string()),
+        acceptedByTokenIdentifier: v.optional(v.string()),
+    })
+        .index("by_token_hash", ["tokenHash"])
+        .index("by_restaurant_id_and_created_at", ["restaurantId", "createdAt"])
+        .index("by_restaurant_id_and_accepted_revoked_expires_created", [
+            "restaurantId",
+            "acceptedAt",
+            "revokedAt",
+            "expiresAt",
+            "createdAt",
         ]),
     restaurantTables: defineTable({
         restaurantId: v.id("restaurants"),

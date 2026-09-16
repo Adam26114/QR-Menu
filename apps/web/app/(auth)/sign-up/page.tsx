@@ -1,8 +1,8 @@
 "use client"
 
 import Link from "next/link"
-import { useRouter } from "next/navigation"
-import { useEffect, useRef, useState } from "react"
+import { useRouter, useSearchParams } from "next/navigation"
+import { Suspense, useEffect, useRef, useState } from "react"
 import { useQuery } from "convex/react"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { useForm } from "react-hook-form"
@@ -49,8 +49,10 @@ type SignUpValues = z.infer<typeof signUpSchema>
  * WHY: The server owns role assignment; this query only controls field visibility.
  * WHERE: Users can open /sign-up before signing in.
  */
-export default function SignUpPage() {
+function SignUpForm() {
     const router = useRouter()
+    const searchParams = useSearchParams()
+    const redirect = safeRedirect(searchParams.get("redirect"))
     const bootstrapAvailable = useQuery(api.authBootstrap.isBootstrapAvailable)
     const [submitError, setSubmitError] = useState<string | null>(null)
     const submitErrorRef = useRef<HTMLParagraphElement>(null)
@@ -87,7 +89,7 @@ export default function SignUpPage() {
             }
 
             toast.success("Account created successfully.")
-            router.replace("/dashboard")
+            router.replace(redirect)
         } catch (error) {
             const message = getSafeSignUpErrorMessage(error)
             setSubmitError(message)
@@ -236,7 +238,7 @@ export default function SignUpPage() {
                         Already have an account?{" "}
                         <Link
                             className="underline underline-offset-4 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
-                            href="/sign-in"
+                            href={`/sign-in?redirect=${encodeURIComponent(redirect)}`}
                         >
                             Sign in
                         </Link>
@@ -245,4 +247,21 @@ export default function SignUpPage() {
             </Form>
         </main>
     )
+}
+
+export default function SignUpPage() {
+    return (
+        <Suspense fallback={null}>
+            <SignUpForm />
+        </Suspense>
+    )
+}
+
+function safeRedirect(value: string | null) {
+    return value &&
+        value.startsWith("/") &&
+        !value.startsWith("//") &&
+        !value.includes("\\")
+        ? value
+        : "/dashboard"
 }

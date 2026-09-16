@@ -98,7 +98,8 @@ export const create = protectedMutation({
             ctx.identity.tokenIdentifier,
             args.name,
             args.slug,
-            args.idempotencyKey
+            args.idempotencyKey,
+            ctx.identity.email
         ),
 })
 
@@ -111,6 +112,7 @@ export const getMembership = protectedQuery({
             _creationTime: v.number(),
             restaurantId: v.id("restaurants"),
             tokenIdentifier: v.string(),
+            email: v.optional(v.string()),
             role: v.union(v.literal("owner"), v.literal("staff")),
             status: v.union(v.literal("active"), v.literal("revoked")),
             canMarkPaid: v.boolean(),

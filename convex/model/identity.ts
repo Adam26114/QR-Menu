@@ -5,6 +5,17 @@ import type { UserIdentity } from "convex/server"
 
 export type DatabaseCtx = QueryCtx | MutationCtx
 
+export function normalizeEmail(email: string): string {
+    const value = email.trim().toLowerCase()
+    if (
+        !value ||
+        value.length > 320 ||
+        !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)
+    )
+        throw expectedError(ERROR_CODES.VALIDATION_FAILED, "Email is invalid")
+    return value
+}
+
 export async function requireIdentity(ctx: DatabaseCtx): Promise<UserIdentity> {
     const identity = await ctx.auth.getUserIdentity()
     if (!identity)

@@ -1,6 +1,7 @@
 import type { Doc, Id } from "../_generated/dataModel"
 import type { MutationCtx, QueryCtx } from "../_generated/server"
 import { expectedError, ERROR_CODES } from "../lib/errors"
+import { normalizeEmail } from "./identity"
 
 const TRIAL_DAYS = 14
 const IDEMPOTENCY_KEY_MAX_LENGTH = 200
@@ -156,7 +157,8 @@ export async function createRestaurant(
     tokenIdentifier: string,
     name: string,
     slug: string,
-    idempotencyKey: string
+    idempotencyKey: string,
+    email?: string
 ) {
     const normalizedIdempotencyKey = normalizeIdempotencyKey(idempotencyKey)
     const priorKeys = await ctx.db
@@ -210,6 +212,7 @@ export async function createRestaurant(
     await ctx.db.insert("restaurantMemberships", {
         restaurantId,
         tokenIdentifier,
+        ...(email ? { email: normalizeEmail(email) } : {}),
         role: "owner",
         status: "active",
         canMarkPaid: true,

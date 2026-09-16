@@ -2,7 +2,8 @@
 
 import { zodResolver } from "@hookform/resolvers/zod"
 import { useForm } from "react-hook-form"
-import { useRouter } from "next/navigation"
+import { useRouter, useSearchParams } from "next/navigation"
+import { Suspense } from "react"
 import Link from "next/link"
 import { z } from "zod"
 import { authClient } from "@/lib/auth-client"
@@ -29,8 +30,10 @@ type SignInValues = z.infer<typeof signInSchema>
  * WHY: The generic example needs a safe entry point for authenticated project data.
  * WHERE: Users can open /sign-in before visiting the dashboard.
  */
-export default function SignInPage() {
+function SignInForm() {
     const router = useRouter()
+    const searchParams = useSearchParams()
+    const redirect = safeRedirect(searchParams.get("redirect"))
     const form = useForm<SignInValues>({
         resolver: zodResolver(signInSchema),
         defaultValues: { email: "", password: "" },
@@ -43,7 +46,7 @@ export default function SignInPage() {
                 return
             }
             toast.success("Signed in successfully.")
-            router.replace("/dashboard")
+            router.replace(redirect)
         } catch (error) {
             toast.error(
                 error instanceof Error ? error.message : "Could not sign in."
@@ -106,7 +109,7 @@ export default function SignInPage() {
                     <p className="text-center text-sm text-muted-foreground">
                         Don&apos;t have an account?{" "}
                         <Link
-                            href="/sign-up"
+                            href={`/sign-up?redirect=${encodeURIComponent(redirect)}`}
                             className="underline underline-offset-4"
                         >
                             Sign up
@@ -116,4 +119,21 @@ export default function SignInPage() {
             </Form>
         </main>
     )
+}
+
+export default function SignInPage() {
+    return (
+        <Suspense fallback={null}>
+            <SignInForm />
+        </Suspense>
+    )
+}
+
+function safeRedirect(value: string | null) {
+    return value &&
+        value.startsWith("/") &&
+        !value.startsWith("//") &&
+        !value.includes("\\")
+        ? value
+        : "/dashboard"
 }

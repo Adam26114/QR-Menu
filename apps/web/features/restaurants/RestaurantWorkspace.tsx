@@ -22,6 +22,7 @@ import {
 import { RestaurantSettingsForm } from "./RestaurantSettingsForm"
 import { MenuWorkspace } from "../menu/MenuWorkspace"
 import { TablesWorkspace } from "./TablesWorkspace"
+import { StaffWorkspace } from "./StaffWorkspace"
 
 export function RestaurantWorkspace({
     section = "overview",
@@ -58,6 +59,11 @@ export function RestaurantWorkspace({
         return <RestaurantSettingsForm restaurant={restaurant} />
     if (section === "menu") return <MenuWorkspace restaurant={restaurant} />
     if (section === "tables") return <TablesWorkspace restaurant={restaurant} />
+    if (section === "staff") {
+        if (membership.role !== "owner")
+            return <ReadOnlyState section={section} />
+        return <StaffWorkspace restaurant={restaurant} />
+    }
     if (section === "overview")
         return (
             <Overview
