@@ -169,8 +169,9 @@ test("payment reports use the order currency snapshot after restaurant currency 
 test("payment contribution fails closed when duplicate summaries already exist", async () => {
     const { t, owner, restaurantId, table, itemId, choiceId } = await setup()
     const order = await t.mutation(api.orders.submitPublic, { restaurantSlug: "orders-cafe", tableToken: table.token, idempotencyKey: "duplicate-summary", items: [{ itemId, quantity: 1, choiceIds: [choiceId] }] })
+    const businessDate = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Yangon", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date()).replaceAll("-", "")
     await t.run(async (ctx) => {
-        const fields = { restaurantId, businessDate: "20260916", timezone: "Asia/Yangon", currency: "MMK", paidOrderCount: 0, subtotalMinor: 0, taxMinor: 0, serviceChargeMinor: 0, totalMinor: 0, cashMinor: 0, cardMinor: 0, digitalMinor: 0, otherMinor: 0, cashOrderCount: 0, cardOrderCount: 0, digitalOrderCount: 0, otherOrderCount: 0 }
+        const fields = { restaurantId, businessDate, timezone: "Asia/Yangon", currency: "MMK", paidOrderCount: 0, subtotalMinor: 0, taxMinor: 0, serviceChargeMinor: 0, totalMinor: 0, cashMinor: 0, cardMinor: 0, digitalMinor: 0, otherMinor: 0, cashOrderCount: 0, cardOrderCount: 0, digitalOrderCount: 0, otherOrderCount: 0 }
         await ctx.db.insert("salesSummaryDaily", fields)
         await ctx.db.insert("salesSummaryDaily", fields)
     })

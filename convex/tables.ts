@@ -318,6 +318,11 @@ export const regenerateInternal = internalMutation({
             membership.role !== "owner"
         )
             throw expectedError(ERROR_CODES.FORBIDDEN, "Owner access required")
+        if (!row.active || row.archived)
+            throw expectedError(
+                ERROR_CODES.FORBIDDEN,
+                "Table ordering link is unavailable"
+            )
         await ctx.db.patch(a.tableId, {
             tokenHash: a.tokenHash,
             tokenCiphertext: a.tokenCiphertext,
@@ -354,6 +359,11 @@ export const getForToken = internalQuery({
             membership.role !== "owner"
         )
             throw expectedError(ERROR_CODES.FORBIDDEN, "Owner access required")
+        if (!row.active || row.archived)
+            throw expectedError(
+                ERROR_CODES.FORBIDDEN,
+                "Table ordering link is unavailable"
+            )
         return {
             tokenCiphertext: row.tokenCiphertext,
             tokenIv: row.tokenIv,

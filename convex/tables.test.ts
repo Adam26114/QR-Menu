@@ -49,6 +49,12 @@ test("owner table lifecycle and token rotation", async () => {
         tableId: created.tableId,
         active: false,
     })
+    await expect(
+        owner.action(api.tables.getToken, { tableId: created.tableId })
+    ).rejects.toThrow("FORBIDDEN")
+    await expect(
+        owner.action(api.tables.regenerateToken, { tableId: created.tableId })
+    ).rejects.toThrow("FORBIDDEN")
     expect(
         await t.query(api.tables.resolvePublic, {
             restaurantSlug: "cafe",
@@ -97,6 +103,12 @@ test("owner table lifecycle and token rotation", async () => {
         other.action(api.tables.regenerateToken, { tableId: created.tableId })
     ).rejects.toThrow("FORBIDDEN")
     await owner.mutation(api.tables.archive, { tableId: created.tableId })
+    await expect(
+        owner.action(api.tables.getToken, { tableId: created.tableId })
+    ).rejects.toThrow("FORBIDDEN")
+    await expect(
+        owner.action(api.tables.regenerateToken, { tableId: created.tableId })
+    ).rejects.toThrow("FORBIDDEN")
     expect((await owner.query(api.tables.list, { restaurantId })).length).toBe(
         0
     )

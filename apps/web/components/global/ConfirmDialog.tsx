@@ -20,13 +20,14 @@ type ConfirmDialogProps = {
     confirmLabel: string
     cancelLabel: string
     pending: boolean
-    onConfirm: () => Promise<void>
+    onConfirm: () => Promise<void | boolean>
+    errorMessage?: string
 }
 
 /**
  * SOURCE OF TRUTH KEYWORDS: ConfirmDialog, AlertDialog, destructive action, async confirmation
  * WHAT: Provides a controlled, reusable confirmation wrapper for destructive operations.
- * WHY: Confirmation closes only after the caller's action succeeds and prevents duplicate submissions.
+ * WHY: Confirmation closes only after the caller's action succeeds and prevents duplicate submissions. Callbacks may return false or reject to keep the dialog open.
  * WHERE: Restaurant admin and order workflows use this wrapper before invoking typed Convex callbacks.
  */
 export function ConfirmDialog({
@@ -38,13 +39,16 @@ export function ConfirmDialog({
     cancelLabel,
     pending,
     onConfirm,
+    errorMessage,
 }: ConfirmDialogProps) {
     const [confirming, setConfirming] = useState(false)
     const handleConfirm = async () => {
         setConfirming(true)
         try {
-            await onConfirm()
-            onOpenChange(false)
+            const result = await onConfirm()
+            if (result !== false) onOpenChange(false)
+        } catch {
+            // Keep the dialog open when the callback rejects.
         } finally {
             setConfirming(false)
         }
@@ -58,6 +62,11 @@ export function ConfirmDialog({
                         {description}
                     </AlertDialogDescription>
                 </AlertDialogHeader>
+                {errorMessage && (
+                    <p role="alert" className="text-sm text-destructive">
+                        {errorMessage}
+                    </p>
+                )}
                 <AlertDialogFooter>
                     <AlertDialogCancel disabled={pending || confirming}>
                         {cancelLabel}

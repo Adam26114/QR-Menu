@@ -5,6 +5,7 @@ import {
     Component,
     type ReactNode,
     useCallback,
+    useEffect,
     useRef,
     useState,
 } from "react"
@@ -101,58 +102,74 @@ function TableLink({ slug, token }: { slug: string; token: string }) {
     const url = publicUrl(slug, token)
     const qrRef = useRef<SVGSVGElement>(null)
     const [copied, setCopied] = useState(false)
-    const [printError, setPrintError] = useState<string>()
+    const [actionError, setActionError] = useState<string>()
 
     async function copy() {
+        setActionError(undefined)
         try {
             await navigator.clipboard.writeText(url)
             setCopied(true)
             window.setTimeout(() => setCopied(false), 1800)
         } catch {
             setCopied(false)
+            setActionError("Unable to copy the ordering link. Try again.")
         }
     }
 
     function downloadQr() {
+        setActionError(undefined)
         const svg = qrRef.current
-        if (!svg) return
+        if (!svg) {
+            setActionError("Unable to download the QR code. Try again.")
+            return
+        }
 
-        const blob = new Blob([svg.outerHTML], { type: "image/svg+xml" })
-        const downloadUrl = URL.createObjectURL(blob)
-        const link = document.createElement("a")
-        link.href = downloadUrl
-        link.download = "table-order-qr.svg"
-        link.click()
-        URL.revokeObjectURL(downloadUrl)
+        let downloadUrl: string | undefined
+        try {
+            const blob = new Blob([svg.outerHTML], { type: "image/svg+xml" })
+            downloadUrl = URL.createObjectURL(blob)
+            const link = document.createElement("a")
+            link.href = downloadUrl
+            link.download = "table-order-qr.svg"
+            link.click()
+        } catch {
+            setActionError("Unable to download the QR code. Try again.")
+        } finally {
+            if (downloadUrl) URL.revokeObjectURL(downloadUrl)
+        }
     }
 
     function print() {
-        setPrintError(undefined)
-        const printWindow = window.open("", "_blank")
-        if (!printWindow) {
-            setPrintError(
-                "Unable to open the print preview. Allow pop-ups and try again."
+        setActionError(undefined)
+        try {
+            const printWindow = window.open("", "_blank")
+            if (!printWindow) {
+                setActionError(
+                    "Unable to open the print preview. Allow pop-ups and try again."
+                )
+                return
+            }
+            const qrMarkup = qrRef.current?.outerHTML
+            if (!qrMarkup) {
+                printWindow.close()
+                setActionError(
+                    "Unable to prepare the QR code for printing. Try again."
+                )
+                return
+            }
+            const escapedUrl = url
+                .replaceAll("&", "&amp;")
+                .replaceAll("<", "&lt;")
+                .replaceAll(">", "&gt;")
+            printWindow.document.write(
+                `<title>Table link</title><main style="font-family: sans-serif; padding: 32px; text-align: center"><h1>Scan to order</h1>${qrMarkup}<p style="font-family: monospace; overflow-wrap: anywhere">${escapedUrl}</p></main>`
             )
-            return
+            printWindow.document.close()
+            printWindow.focus()
+            printWindow.print()
+        } catch {
+            setActionError("Unable to print the QR code. Try again.")
         }
-        const qrMarkup = qrRef.current?.outerHTML
-        if (!qrMarkup) {
-            printWindow.close()
-            setPrintError(
-                "Unable to prepare the QR code for printing. Try again."
-            )
-            return
-        }
-        const escapedUrl = url
-            .replaceAll("&", "&amp;")
-            .replaceAll("<", "&lt;")
-            .replaceAll(">", "&gt;")
-        printWindow.document.write(
-            `<title>Table link</title><main style="font-family: sans-serif; padding: 32px; text-align: center"><h1>Scan to order</h1>${qrMarkup}<p style="font-family: monospace; overflow-wrap: anywhere">${escapedUrl}</p></main>`
-        )
-        printWindow.document.close()
-        printWindow.focus()
-        printWindow.print()
     }
 
     return (
@@ -224,9 +241,9 @@ function TableLink({ slug, token }: { slug: string; token: string }) {
                     Open
                 </a>
             </div>
-            {printError && (
+            {actionError && (
                 <p role="alert" className="text-sm text-destructive">
-                    {printError}
+                    {actionError}
                 </p>
             )}
         </div>
@@ -247,12 +264,24 @@ function TableRow({ table, slug }: { table: Table; slug: string }) {
     const [token, setToken] = useState<string>()
     const [qrOpen, setQrOpen] = useState(false)
     const [confirmArchive, setConfirmArchive] = useState(false)
+    const [confirmRegenerate, setConfirmRegenerate] = useState(false)
     const [pending, setPending] = useState(false)
     const [error, setError] = useState<string>()
+    const revealRequest = useRef(0)
+    const mounted = useRef(true)
 
     const closeQr = useCallback(() => {
+        revealRequest.current += 1
         setQrOpen(false)
         setToken(undefined)
+    }, [])
+
+    useEffect(() => {
+        mounted.current = true
+        return () => {
+            mounted.current = false
+            revealRequest.current += 1
+        }
     }, [])
 
     async function run(action: () => Promise<unknown>) {
@@ -262,6 +291,7 @@ function TableRow({ table, slug }: { table: Table; slug: string }) {
         try {
             await action()
         } catch (cause) {
+            closeQr()
             setError(
                 friendlyError(cause, "Unable to update this table. Try again.")
             )
@@ -283,6 +313,32 @@ function TableRow({ table, slug }: { table: Table; slug: string }) {
     }
 
     const hiddenLink = table.archived || !active
+    const revealLink = async () => {
+        if (pending || !active || table.archived) return
+        const request = ++revealRequest.current
+        setPending(true)
+        setError(undefined)
+        try {
+            const nextToken = await getToken({ tableId: table._id })
+            if (
+                mounted.current &&
+                request === revealRequest.current &&
+                active &&
+                !table.archived
+            ) {
+                setToken(nextToken)
+                setQrOpen(true)
+            }
+        } catch (cause) {
+            if (mounted.current && request === revealRequest.current) {
+                setToken(undefined)
+                setQrOpen(false)
+                setError(friendlyError(cause, "Unable to reveal this ordering link. Try again."))
+            }
+        } finally {
+            if (mounted.current) setPending(false)
+        }
+    }
     return (
         <article
             className={`grid gap-4 rounded-xl border p-4 ${table.archived ? "bg-muted/20 opacity-80" : "bg-card"}`}
@@ -305,7 +361,7 @@ function TableRow({ table, slug }: { table: Table; slug: string }) {
                             />
                             <Input value={area} onChange={(event) => setArea(event.target.value)} aria-label={`Area for ${table.name}`} className="h-8 w-36" />
                             <select className="h-8 rounded-md border bg-background px-2 text-sm" value={serviceStatus} onChange={(event) => setServiceStatus(event.target.value as "available" | "reserved")} aria-label="Service status"><option value="available">Available</option><option value="reserved">Reserved</option></select>
-                            <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={active} onChange={(event) => { const nextActive = event.target.checked; setActive(nextActive); if (!nextActive) closeQr() }} /> Active</label>
+                            <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={active} onChange={(event) => { const nextActive = event.target.checked; setActive(nextActive); if (!nextActive) { closeQr() } }} /> Active</label>
                             <Button type="submit" size="sm" disabled={pending}>
                                 {pending ? "Saving..." : "Save"}
                             </Button>
@@ -408,7 +464,7 @@ function TableRow({ table, slug }: { table: Table; slug: string }) {
                             type="button"
                             size="sm"
                             variant="secondary"
-                            onClick={() => void run(async () => { setToken(await getToken({ tableId: table._id })); setQrOpen(true) })}
+                             onClick={() => void revealLink()}
                             disabled={pending}
                         >
                             <Link2 aria-hidden="true" />{" "}
@@ -417,48 +473,63 @@ function TableRow({ table, slug }: { table: Table; slug: string }) {
                                 : "Reveal ordering link"}
                         </Button>
                     )}
-                    {token && (
-                        <Button
-                            type="button"
-                            size="sm"
-                            variant="ghost"
-                            onClick={() =>
-                                void run(async () => {
-                                    setToken(undefined)
-                                    const result = await regenerate({
-                                        tableId: table._id,
-                                    })
-                                    setToken(result.token)
-                                })
-                            }
-                            disabled={pending}
-                        >
-                            {pending ? "Regenerating..." : "Regenerate token"}
-                        </Button>
-                    )}
-                </div>
-            )}
-             <Dialog open={qrOpen && Boolean(token)} onOpenChange={(open) => !open && closeQr()}>
-                 <DialogContent>
-                     <div className="flex min-w-0 items-center justify-between gap-3">
+                 </div>
+             )}
+              <Dialog open={qrOpen} onOpenChange={(open) => !open && closeQr()}>
+                  <DialogContent className="max-h-[90vh] w-[calc(100%-2rem)] overflow-y-auto sm:max-w-2xl">
+                      <div className="flex min-w-0 items-center justify-between gap-3">
                          <div>
                              <DialogTitle>{table.name} ordering QR</DialogTitle>
                              <DialogDescription>Share this private ordering link with guests.</DialogDescription>
                          </div>
                          <Button type="button" variant="ghost" onClick={closeQr}>Close</Button>
-                     </div>
-                     {token && <TableLink slug={slug} token={token} />}
-                 </DialogContent>
-             </Dialog>
-            <ConfirmDialog
+                      </div>
+                       {qrOpen && token && (
+                           <>
+                               <TableLink slug={slug} token={token} />
+                               <Button
+                                    type="button"
+                                    variant="outline"
+                                    onClick={() => {
+                                        setError(undefined)
+                                        closeQr()
+                                        setConfirmRegenerate(true)
+                                    }}
+                                   disabled={pending}
+                               >
+                                   Regenerate token
+                               </Button>
+                           </>
+                       )}
+                  </DialogContent>
+              </Dialog>
+              <ConfirmDialog
+                  open={confirmRegenerate}
+                  onOpenChange={(open) => {
+                      setConfirmRegenerate(open)
+                      if (!open) closeQr()
+                  }}
+                 title={`Regenerate ${table.name}'s ordering token?`}
+                 description="The current ordering link will stop working immediately. You will need to reveal the replacement link again after confirmation."
+                  confirmLabel="Regenerate token"
+                  cancelLabel="Cancel"
+                  pending={pending}
+                  errorMessage={error}
+                  onConfirm={() => run(() => regenerate({ tableId: table._id }))}
+              />
+             <ConfirmDialog
                 open={confirmArchive}
-                onOpenChange={setConfirmArchive}
+                 onOpenChange={(open) => {
+                     setConfirmArchive(open)
+                     if (!open) closeQr()
+                 }}
                 title={`Archive ${table.name}?`}
                 description="You can restore this table later."
                 confirmLabel="Archive"
-                cancelLabel="Cancel"
-                pending={pending}
-                 onConfirm={async () => {
+                 cancelLabel="Cancel"
+                 pending={pending}
+                 errorMessage={error}
+                  onConfirm={async () => {
                      const succeeded = await run(() => archive({ tableId: table._id }))
                      if (!succeeded) throw new Error("Unable to complete this action.")
                      closeQr()
@@ -631,7 +702,7 @@ function TablesWorkspaceContent({ restaurant }: Props) {
                 <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                     {visibleTables.map((table) => (
                         <TableRow
-                            key={table._id}
+                            key={`${table._id}-${table.active ? "active" : "inactive"}-${table.archived ? "archived" : "current"}`}
                             table={table}
                             slug={restaurant.slug}
                         />
