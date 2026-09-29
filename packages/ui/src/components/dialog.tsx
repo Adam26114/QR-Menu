@@ -29,11 +29,12 @@ function DialogOverlay({
 function DialogContent({
     className,
     children,
+    overlayClassName,
     ...props
-}: DialogPrimitive.Popup.Props) {
+}: DialogPrimitive.Popup.Props & { overlayClassName?: string }) {
     return (
         <DialogPortal>
-            <DialogOverlay />
+            <DialogOverlay className={overlayClassName} />
             <DialogPrimitive.Popup
                 className={cn(
                     "fixed top-1/2 left-1/2 z-50 grid max-h-[90vh] w-[calc(100%-2rem)] max-w-lg -translate-x-1/2 -translate-y-1/2 gap-4 overflow-y-auto rounded-xl border bg-background p-6 shadow-lg outline-none data-ending-style:opacity-0 data-starting-style:opacity-0",
